@@ -5,6 +5,7 @@ export type MarketView = {
   id: string
   symbol: string
   asset: "BTC" | "ETH"
+  question: string
   durationSec: number
   strike: string
   upPrice: number | null
