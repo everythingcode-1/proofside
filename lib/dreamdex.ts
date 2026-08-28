@@ -19,15 +19,22 @@ export async function currentMarket(): Promise<MarketView> {
   const exchange = createExchange()
   try {
     const all = Object.values(await exchange.loadMarkets(true)) as UnifiedMarket[]
-    const candidates = all
-      .filter((market) => {
-        if (market.type !== "binary" || !isBinaryMarket(market.info)) return false
-        return sameVenue(market.info.venueId) && ["BTC", "ETH"].includes(market.info.asset.toUpperCase())
-      })
+    const live = all.filter((market) =>
+      market.type === "binary" &&
+      market.active &&
+      isBinaryMarket(market.info) &&
+      ["BTC", "ETH"].includes(market.info.asset.toUpperCase()),
+    )
+    const scoped = live.filter((market) => isBinaryMarket(market.info) && sameVenue(market.info.venueId))
+    const venues = [...new Set(live.map((market) => isBinaryMarket(market.info) ? market.info.venueId?.toLowerCase() : null).filter(Boolean))]
+    const candidates = (scoped.length ? scoped : venues.length === 1 ? live : [])
       .sort((a, b) => Number(isBinaryMarket(a.info) ? a.info.expiry : 0) - Number(isBinaryMarket(b.info) ? b.info.expiry : 0))
 
     const market = candidates[0]
-    if (!market || !isBinaryMarket(market.info)) throw new Error("No active BTC or ETH DreamDEX Event Contract is available on the configured venue.")
+    if (!market || !isBinaryMarket(market.info)) {
+      const detail = venues.length > 1 ? ` Live markets span ${venues.length} venues; set NEXT_PUBLIC_DREAMDEX_VENUE_ID explicitly.` : ""
+      throw new Error(`No active BTC or ETH DreamDEX Event Contract is available on the configured venue.${detail}`)
+    }
 
     const info = market.info
     const onchain = await exchange.client.getMarketOnchain(info.marketId)
