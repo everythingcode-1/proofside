@@ -75,7 +75,9 @@ export async function browserExchange(provider: EIP1193Provider) {
   const walletClient = createWalletClient({ chain: somniaTestnet, transport: custom(provider) })
   const [account] = await walletClient.requestAddresses()
   if (!account) throw new Error("No wallet account was selected.")
-  return { exchange: createExchange(walletClient), walletClient, account }
+  const exchange = createExchange(walletClient)
+  await exchange.loadMarkets()
+  return { exchange, walletClient, account }
 }
 
 export function watchMarketBook(
