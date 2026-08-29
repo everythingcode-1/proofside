@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { EIP1193Provider } from "viem"
 import { DREAMDEX } from "@/lib/config"
 import { browserPortfolio, faucetBrowserCollateral, placeBrowserOrder, watchMarketBook, type PortfolioView } from "@/lib/dreamdex"
@@ -9,6 +9,8 @@ import { openingSummary, resultSummary } from "@/lib/lifecycle"
 import { freshnessState, type FreshnessState } from "@/lib/realtime"
 import type { TransactionState } from "@/lib/transactions"
 import type { Direction, MarketView, RoomState, TradeProof } from "@/lib/types"
+import { pulseStage, speedLabel } from "@/lib/pulse-ui"
+import { PulseRail } from "@/components/pulse-rail"
 
 type MarketResponse = { market?: MarketView; error?: string; fetchedAt: number }
 type Activity = { kind: "FAUCET" | "ORDER"; hash: `0x${string}`; detail: string }
@@ -43,6 +45,8 @@ export function PredictionRoom() {
   const [activities, setActivities] = useState<Activity[]>([])
   const [signals, setSignals] = useState<AgentSignal[]>([])
   const [attribution, setAttribution] = useState<{ agent: string; signal: string; name?: string } | null>(null)
+  const [verificationMs, setVerificationMs] = useState<number | null>(null)
+  const actionStartedAt = useRef<number | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -193,6 +197,7 @@ export function PredictionRoom() {
     const account = wallet || (await connect())
     if (!injected || !account) return
     setTradeState("AWAITING_SIGNATURE")
+    actionStartedAt.current = performance.now()
     setTradeMessage("Confirm the tUSDC faucet transaction in your wallet…")
     try {
       const result = await faucetBrowserCollateral(injected)
@@ -202,6 +207,7 @@ export function PredictionRoom() {
         status: "confirmed",
       })
       setTradeState("CONFIRMED")
+      setVerificationMs(actionStartedAt.current === null ? null : performance.now() - actionStartedAt.current)
       setTradeMessage("10,000 tUSDC added to your wallet. You can now trade on DreamDEX.")
       setActivities((current) => [{ kind: "FAUCET", hash: result.hash, detail: "10,000 tUSDC claimed" }, ...current])
       await refreshPortfolio(account)
@@ -229,6 +235,7 @@ export function PredictionRoom() {
       return
     }
     setTradeState("PREFLIGHT")
+    actionStartedAt.current = performance.now()
     setTradeMessage("Checking market status, quote, and gas balance…")
     try {
       const result = await placeBrowserOrder({
@@ -249,6 +256,7 @@ export function PredictionRoom() {
       }
       setTradeProof(proof)
       setTradeState("CONFIRMED")
+      setVerificationMs(actionStartedAt.current === null ? null : performance.now() - actionStartedAt.current)
       const execution = result.execution
       const price = execution.averagePrice === null ? "" : ` at ${(execution.averagePrice * 100).toFixed(1)}¢`
       setTradeMessage(
@@ -298,8 +306,7 @@ export function PredictionRoom() {
   if (!market) {
     return (
       <section className="room-shell unavailable" aria-live="polite">
-        <div className="agent-orb"><span /></div>
-        <p className="eyebrow">Host agent · scanning</p>
+        <p className="eyebrow">DreamDEX live market</p>
         <h2>{error ? "No live room found" : "Opening the next room…"}</h2>
         <p>{error || "Reading active DreamDEX Event Contracts from Somnia."}</p>
         {error && <button className="secondary-button" onClick={refresh}>Try again</button>}
@@ -309,18 +316,16 @@ export function PredictionRoom() {
 
   const selectedPrice = direction === "UP" ? market.upPrice : market.downPrice
   const maxLoss = selectedPrice === null ? null : Number(shares || 0) * selectedPrice
+  const currentPulseStage = pulseStage(freshness, tradeState)
 
   return (
     <section className="room-shell" aria-label="Live DreamPulse room">
-      <div className="agent-strip">
-        <div className="agent-identity">
-          <div className="agent-orb"><span /></div>
-          <div><p>DreamPulse host</p><small>Autonomous lifecycle agent</small></div>
-        </div>
-        <div className={`agent-status ${freshness.toLowerCase()}`}>
-          <span /> {freshnessLabel} · {lastVerifiedAt ? `VERIFIED ${new Date(lastVerifiedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "WAITING"}
-        </div>
+      <div className="live-console">
+        <div><span className={`live-dot ${freshness.toLowerCase()}`} /> <strong>Somnia · 50312</strong><small>{freshnessLabel}</small></div>
+        <div><small>Market data</small><strong>{lastVerifiedAt ? new Date(lastVerifiedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</strong></div>
+        <div><small>Execution</small><strong>{tradeState === "CONFIRMED" ? speedLabel(verificationMs) : wallet ? "Wallet ready" : "Wallet required"}</strong></div>
       </div>
+      <PulseRail stage={currentPulseStage} status={`Execution flow: ${currentPulseStage.toLowerCase()}`} />
 
       {previousMarketId && (
         <div className="rollover-note">✦ Host opened a new room after market <span>{short(previousMarketId)}</span> left the live venue.</div>
@@ -348,8 +353,7 @@ export function PredictionRoom() {
           </div>
 
           <div className="host-note">
-            <span className="spark">✦</span>
-            <div><small>HOST SUMMARY · FACTUAL</small><p>{hostText}</p></div>
+            <div><small>MARKET RULE</small><p>{hostText}</p></div>
           </div>
 
           {signals.length > 0 && <div className="signal-list"><div className="section-heading"><span>Agent signals</span><small>auditable · not trades</small></div>{signals.map((signal) => <button key={signal.id} onClick={() => { setDirection(signal.direction); setAttribution({ agent: signal.actorId, signal: signal.id, name: signal.agent.name }) }}><span><b>{signal.agent.name}</b> <em>AGENT</em><small>{signal.reason || signal.agent.framework}</small></span><strong className={signal.direction.toLowerCase()}>{signal.direction} {signal.confidence === null ? "" : `${signal.confidence}%`}</strong></button>)}</div>}
@@ -371,12 +375,12 @@ export function PredictionRoom() {
           <div className="amount-input"><input id="shares" inputMode="decimal" value={shares} onChange={(event) => setShares(event.target.value)} /><span>contracts</span></div>
 
           <div className="risk-box">
-            <div><span>Wallet balance</span><strong>{portfolio ? `${portfolio.collateral.toLocaleString(undefined, { maximumFractionDigits: 3 })} ${portfolio.collateralCode}` : "—"}</strong></div>
-            <div><span>UP / DOWN held</span><strong>{portfolio ? `${portfolio.upShares} / ${portfolio.downShares}` : "—"}</strong></div>
             <div><span>Live price</span><strong>{probabilityLabel(selectedPrice)}</strong></div>
             <div><span>Maximum loss</span><strong>{maxLoss === null ? "—" : `${maxLoss.toFixed(2)} tUSDC`}</strong></div>
             <div><span>Execution</span><strong>DreamDEX IOC</strong></div>
           </div>
+
+          <details className="portfolio-disclosure"><summary>Portfolio</summary><div><span>Wallet balance</span><strong>{portfolio ? `${portfolio.collateral.toLocaleString(undefined, { maximumFractionDigits: 3 })} ${portfolio.collateralCode}` : "—"}</strong></div><div><span>UP / DOWN held</span><strong>{portfolio ? `${portfolio.upShares} / ${portfolio.downShares}` : "—"}</strong></div></details>
 
           {!wallet && <button className="primary-button" onClick={connect} disabled={tradeState === "PREFLIGHT"}>Connect wallet</button>}
           {wallet && <button className="secondary-button" onClick={submitConviction} disabled={!market.isLive}>Add conviction only</button>}
@@ -388,13 +392,13 @@ export function PredictionRoom() {
           </button>
           <p className={`trade-message ${tradeState.toLowerCase()}`} aria-live="polite">{tradeMessage}</p>
 
-          <div className="proof-panel">
+          {tradeProof && <div className="proof-panel">
             <div className="section-heading"><span>Onchain proof</span><small>authoritative</small></div>
             <dl>
               <div><dt>Network</dt><dd>Somnia · 50312</dd></div>
               <div><dt>Market ID</dt><dd title={market.id}>{short(market.id)}</dd></div>
               <div><dt>Pool</dt><dd title={market.contractAddress}>{short(market.contractAddress)}</dd></div>
-              <div><dt>Transaction</dt><dd>{tradeProof ? <a href={tradeProof.explorerUrl} target="_blank" rel="noreferrer">{short(tradeProof.hash)} ↗</a> : "Not submitted"}</dd></div>
+              <div><dt>Transaction</dt><dd><a href={tradeProof.explorerUrl} target="_blank" rel="noreferrer">{short(tradeProof.hash)} ↗</a></dd></div>
             </dl>
             {activities.length > 0 && <dl>
               {activities.slice(0, 4).map((activity) => <div key={`${activity.kind}-${activity.hash}`}>
@@ -402,7 +406,7 @@ export function PredictionRoom() {
                 <dd><a href={`${DREAMDEX.explorerUrl}/tx/${activity.hash}`} target="_blank" rel="noreferrer" title={activity.detail}>{activity.detail} ↗</a></dd>
               </div>)}
             </dl>}
-          </div>
+          </div>}
         </aside>
       </div>
     </section>

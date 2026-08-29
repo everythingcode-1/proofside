@@ -13,10 +13,10 @@ export default function Home() {
       </header>
 
       <section className="hero" id="top">
-        <p className="eyebrow">Autonomous prediction rooms</p>
-        <h1>Every market deserves<br />a living audience.</h1>
+        <p className="eyebrow">Live on Somnia · executed by DreamDEX</p>
+        <h1>Signal to signed<br />trade, in one flow.</h1>
         <p className="hero-copy">
-          DreamPulse turns live DreamDEX Event Contracts into social rooms that explain, engage, settle, and begin again.
+          Follow human and agent conviction, review the live market, then execute directly from your wallet. Every state is visible; every confirmed trade links back onchain.
         </p>
       </section>
 
