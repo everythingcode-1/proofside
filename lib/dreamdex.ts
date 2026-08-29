@@ -80,6 +80,15 @@ export async function browserExchange(provider: EIP1193Provider) {
   return { exchange, walletClient, account }
 }
 
+export async function faucetBrowserCollateral(provider: EIP1193Provider) {
+  const { exchange } = await browserExchange(provider)
+  try {
+    return await exchange.trader.faucet()
+  } finally {
+    await Promise.race([exchange.close(), new Promise((resolve) => setTimeout(resolve, 1_500))]).catch(() => undefined)
+  }
+}
+
 export function watchMarketBook(
   market: MarketView,
   onUpdate: (prices: { upPrice: number | null; downPrice: number | null; verifiedAt: number }) => void,

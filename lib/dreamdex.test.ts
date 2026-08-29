@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const loadMarkets = vi.fn(async () => ({}))
+const faucet = vi.fn(async () => ({ hash: "0xabc" }))
+const close = vi.fn(async () => undefined)
 
 vi.mock("@somnia-chain/markets-sdk", () => ({
   isBinaryMarket: vi.fn(),
-  SomniaMarkets: vi.fn(() => ({ loadMarkets })),
+  SomniaMarkets: vi.fn(() => ({ loadMarkets, trader: { faucet }, close })),
 }))
 
 vi.mock("viem", async (importOriginal) => ({
@@ -15,12 +17,25 @@ vi.mock("viem", async (importOriginal) => ({
 }))
 
 describe("browserExchange", () => {
-  beforeEach(() => loadMarkets.mockClear())
+  beforeEach(() => {
+    loadMarkets.mockClear()
+    faucet.mockClear()
+    close.mockClear()
+  })
 
   it("loads the symbol registry before returning a wallet exchange", async () => {
     const { browserExchange } = await import("./dreamdex")
     await browserExchange({ request: vi.fn(), on: vi.fn(), removeListener: vi.fn() })
 
     expect(loadMarkets).toHaveBeenCalledOnce()
+  })
+
+  it("claims test collateral through the DreamDEX faucet", async () => {
+    const { faucetBrowserCollateral } = await import("./dreamdex")
+    const result = await faucetBrowserCollateral({ request: vi.fn(), on: vi.fn(), removeListener: vi.fn() })
+
+    expect(faucet).toHaveBeenCalledOnce()
+    expect(result.hash).toBe("0xabc")
+    expect(close).toHaveBeenCalledOnce()
   })
 })

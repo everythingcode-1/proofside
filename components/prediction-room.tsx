@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { EIP1193Provider } from "viem"
 import { DREAMDEX } from "@/lib/config"
-import { placeBrowserOrder, watchMarketBook } from "@/lib/dreamdex"
+import { faucetBrowserCollateral, placeBrowserOrder, watchMarketBook } from "@/lib/dreamdex"
 import { countdownLabel, durationLabel, probabilityLabel } from "@/lib/format"
 import { openingSummary, resultSummary } from "@/lib/lifecycle"
 import { freshnessState, type FreshnessState } from "@/lib/realtime"
@@ -147,6 +147,28 @@ export function PredictionRoom() {
     }
     setRoom(payload as RoomState)
     setTradeMessage(`Your ${direction} conviction is in the room. This is not a trade yet.`)
+  }
+
+  const claimCollateral = async () => {
+    const injected = provider()
+    const account = wallet || (await connect())
+    if (!injected || !account) return
+    setTradeState("AWAITING_SIGNATURE")
+    setTradeMessage("Confirm the tUSDC faucet transaction in your wallet…")
+    try {
+      const result = await faucetBrowserCollateral(injected)
+      setTradeProof({
+        hash: result.hash,
+        explorerUrl: `${DREAMDEX.explorerUrl}/tx/${result.hash}`,
+        status: "confirmed",
+      })
+      setTradeState("CONFIRMED")
+      setTradeMessage("10,000 tUSDC added to your wallet. You can now trade on DreamDEX.")
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : "The tUSDC faucet transaction failed."
+      setTradeState(/rejected|denied|cancel/i.test(message) ? "CANCELLED" : /revert/i.test(message) ? "REVERTED" : "BLOCKED")
+      setTradeMessage(message)
+    }
   }
 
   const trade = async () => {
@@ -298,6 +320,9 @@ export function PredictionRoom() {
 
           {!wallet && <button className="primary-button" onClick={connect} disabled={tradeState === "PREFLIGHT"}>Connect wallet</button>}
           {wallet && <button className="secondary-button" onClick={submitConviction} disabled={!market.isLive}>Add conviction only</button>}
+          <button className="secondary-button" onClick={claimCollateral} disabled={["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState)}>
+            {tradeState === "AWAITING_SIGNATURE" ? "Confirm in wallet…" : "Get 10,000 tUSDC"}
+          </button>
           <button className="trade-button" onClick={trade} disabled={!market.isLive || ["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState) || ["STALE", "OFFLINE"].includes(freshness)}>
             {["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState) ? "Transaction in progress…" : `Trade ${direction} on DreamDEX`}
           </button>
