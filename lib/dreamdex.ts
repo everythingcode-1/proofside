@@ -32,12 +32,16 @@ export type PortfolioView = {
   downShares: number
 }
 
-export function orderExecution(order: Pick<UnifiedOrder, "amount" | "filled" | "remaining" | "price" | "status" | "info">): OrderExecution {
+export function orderExecution(
+  order: Pick<UnifiedOrder, "amount" | "filled" | "remaining" | "price" | "status" | "info">,
+  direction: Direction,
+): OrderExecution {
   const fills = ((order.info as { fills?: { quantityFilled: bigint; fillPrice: bigint }[] })?.fills || [])
-  const quantity = fills.reduce((sum, fill) => sum + Number(fill.quantityFilled), 0)
-  const averagePrice = quantity
-    ? fills.reduce((sum, fill) => sum + Number(fill.quantityFilled) * Number(fill.fillPrice), 0) / quantity / 10 ** DREAMDEX.decimals
+  const quantity = fills.reduce((sum, fill) => sum + fill.quantityFilled, 0n)
+  const yesPrice = quantity
+    ? Number(fills.reduce((sum, fill) => sum + fill.quantityFilled * fill.fillPrice, 0n) / quantity) / 10 ** DREAMDEX.decimals
     : null
+  const averagePrice = yesPrice === null ? null : direction === "DOWN" ? 1 - yesPrice : yesPrice
   return {
     status: order.filled <= 0 ? "UNFILLED" : order.remaining > 0 ? "PARTIAL" : "FILLED",
     requested: order.amount,
@@ -212,9 +216,8 @@ export async function placeBrowserOrder(input: {
     const hash = (result.info as { hash?: Hex } | undefined)?.hash || (result as { txHash?: Hex }).txHash
     if (receipt?.status === "reverted") throw new Error(`Order reverted onchain${hash ? ` (${hash})` : ""}.`)
     if (!hash) throw new Error("DreamDEX did not return a transaction hash; the order is not shown as confirmed.")
-    input.onState?.("SUBMITTED", hash)
     input.onState?.("CONFIRMED", hash)
-    return { hash, account, execution: orderExecution(result) }
+    return { hash, account, execution: orderExecution(result, input.direction) }
   } finally {
     await Promise.race([exchange.close(), new Promise((resolve) => setTimeout(resolve, 1_500))]).catch(() => undefined)
   }

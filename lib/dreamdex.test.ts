@@ -57,9 +57,23 @@ describe("DreamDEX account views", () => {
       status: "canceled",
       price: 0.8,
       info: { fills: [{ quantityFilled: 1_000_000n, fillPrice: 720_000n }] },
-    })
+    }, "UP")
 
     expect(execution).toEqual({ status: "PARTIAL", requested: 2, filled: 1, remaining: 1, averagePrice: 0.72 })
+  })
+
+  it("complements the YES fill price for a DOWN contract", async () => {
+    const { orderExecution } = await import("./dreamdex")
+    const execution = orderExecution({
+      amount: 1,
+      filled: 1,
+      remaining: 0,
+      status: "closed",
+      price: 0.3,
+      info: { fills: [{ quantityFilled: 1_000_000n, fillPrice: 720_000n }] },
+    }, "DOWN")
+
+    expect(execution.averagePrice).toBe(0.28)
   })
 
   it("maps collateral and market outcomes from SDK balances", async () => {

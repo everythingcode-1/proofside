@@ -11,6 +11,7 @@ export function freshnessState(input: {
   if (!input.hasSnapshot || input.lastVerifiedAt === null) return "OFFLINE"
   if (now - input.lastVerifiedAt > 20_000) return "STALE"
   if (input.connected) return "LIVE"
+  if (input.retrying) return "RECONNECTING"
   return "POLLING"
 }
 

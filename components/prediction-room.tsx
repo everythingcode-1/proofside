@@ -95,6 +95,9 @@ export function PredictionRoom() {
     lastVerifiedAt,
     now,
   })
+  const freshnessLabel = freshness === "RECONNECTING" && lastVerifiedAt && now - lastVerifiedAt <= 20_000
+    ? "POLLING · WS RECONNECTING"
+    : freshness
 
   const provider = () => (window as Window & { ethereum?: EIP1193Provider }).ethereum
 
@@ -143,6 +146,12 @@ export function PredictionRoom() {
       return null
     }
   }
+
+  useEffect(() => {
+    if (!wallet || !market) return
+    setPortfolio(null)
+    void refreshPortfolio(wallet, market)
+  }, [wallet, market?.id])
 
   const submitConviction = async () => {
     if (!market?.isLive) return
@@ -293,7 +302,7 @@ export function PredictionRoom() {
           <div><p>DreamPulse host</p><small>Autonomous lifecycle agent</small></div>
         </div>
         <div className={`agent-status ${freshness.toLowerCase()}`}>
-          <span /> {freshness} · {lastVerifiedAt ? `VERIFIED ${new Date(lastVerifiedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "WAITING"}
+          <span /> {freshnessLabel} · {lastVerifiedAt ? `VERIFIED ${new Date(lastVerifiedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "WAITING"}
         </div>
       </div>
 
