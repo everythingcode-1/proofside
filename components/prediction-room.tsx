@@ -12,6 +12,7 @@ import type { Direction, MarketView, RoomState, TradeProof } from "@/lib/types"
 
 type MarketResponse = { market?: MarketView; error?: string; fetchedAt: number }
 type Activity = { kind: "FAUCET" | "ORDER"; hash: `0x${string}`; detail: string }
+type AgentSignal = { id: string; actorId: string; direction: Direction; confidence: number | null; reason: string; agent: { name: string; framework: string } }
 
 const emptyRoom = (roomId = "pending"): RoomState => ({
   roomId,
@@ -40,6 +41,8 @@ export function PredictionRoom() {
   const [previousMarketId, setPreviousMarketId] = useState<string | null>(null)
   const [portfolio, setPortfolio] = useState<PortfolioView | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
+  const [signals, setSignals] = useState<AgentSignal[]>([])
+  const [attribution, setAttribution] = useState<{ agent: string; signal: string; name?: string } | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -57,6 +60,8 @@ export function PredictionRoom() {
       setLastVerifiedAt(payload.fetchedAt)
       const roomResponse = await fetch(`/api/rooms/${payload.market.id}`, { cache: "no-store" })
       if (roomResponse.ok) setRoom((await roomResponse.json()) as RoomState)
+      const signalResponse = await fetch(`/api/markets/${payload.market.id}/signals`, { cache: "no-store" })
+      if (signalResponse.ok) setSignals(((await signalResponse.json()) as { signals: AgentSignal[] }).signals)
     } catch {
       setStreamState("RECONNECTING")
       setError("DreamPulse is reconnecting to its server and DreamDEX.")
@@ -87,6 +92,17 @@ export function PredictionRoom() {
     )
     return () => { void stop?.() }
   }, [market?.id, refresh])
+
+  useEffect(() => {
+    if (!market) return
+    const query = new URLSearchParams(window.location.search)
+    if (query.get("market")?.toLowerCase() !== market.id.toLowerCase()) return
+    const selected = signals.find((signal) => signal.id === query.get("signal") && signal.actorId === query.get("agent"))
+    const linkedDirection = query.get("direction")
+    if (selected && (linkedDirection === "UP" || linkedDirection === "DOWN")) {
+      setDirection(linkedDirection); setAttribution({ agent: selected.actorId, signal: selected.id, name: selected.agent.name })
+    }
+  }, [market?.id, signals])
 
   const freshness = freshnessState({
     connected: streamState === "LIVE",
@@ -336,6 +352,8 @@ export function PredictionRoom() {
             <div><small>HOST SUMMARY · FACTUAL</small><p>{hostText}</p></div>
           </div>
 
+          {signals.length > 0 && <div className="signal-list"><div className="section-heading"><span>Agent signals</span><small>auditable · not trades</small></div>{signals.map((signal) => <button key={signal.id} onClick={() => { setDirection(signal.direction); setAttribution({ agent: signal.actorId, signal: signal.id, name: signal.agent.name }) }}><span><b>{signal.agent.name}</b> <em>AGENT</em><small>{signal.reason || signal.agent.framework}</small></span><strong className={signal.direction.toLowerCase()}>{signal.direction} {signal.confidence === null ? "" : `${signal.confidence}%`}</strong></button>)}</div>}
+
           <div className="crowd-card">
             <div className="section-heading"><span>Room conviction</span><small>{room.participants} participants</small></div>
             <div className="conviction-bar"><span style={{ width: `${room.upPercent}%` }} /></div>
@@ -346,6 +364,7 @@ export function PredictionRoom() {
 
         <aside className="action-panel">
           <div className="section-heading"><span>Your position</span><small>{wallet ? short(wallet) : "wallet not connected"}</small></div>
+          {attribution && <p className="signal-attribution">Signal from {attribution.name || short(attribution.agent)}; review before signing.</p>}
           <div className="direction-review"><span>Conviction</span><strong className={direction.toLowerCase()}>{direction === "UP" ? "▲" : "▼"} {direction}</strong></div>
 
           <label htmlFor="shares">Shares</label>

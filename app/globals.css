@@ -26,6 +26,20 @@ body {
 }
 
 button, input { font: inherit; }
+nav { display: flex; gap: 10px; color: var(--muted); font-size: 12px; }
+nav a { text-decoration: none; }
+nav a:hover { color: var(--amber); }
+.console-card { max-width: 760px; margin-bottom: 80px; padding: 30px; border: 1px solid var(--line); background: var(--panel); }
+.console-card label { display: block; margin: 18px 0; color: var(--muted); font-size: 12px; }
+.console-card input { width: 100%; margin-top: 8px; padding: 14px; color: var(--paper); background: var(--ink); border: 1px solid var(--line); }
+.console-card pre, .key-reveal { overflow: auto; padding: 18px; border: 1px solid var(--line); background: var(--ink); color: var(--cyan); }
+.key-reveal code, .key-reveal small { display: block; margin: 12px 0; overflow-wrap: anywhere; }
+.signal-list { margin-top: 24px; padding: 20px; border: 1px solid var(--line); }
+.signal-list button { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding: 13px; text-align: left; color: var(--paper); background: var(--ink); border: 1px solid var(--line); }
+.signal-list button span small { display: block; margin-top: 5px; color: var(--muted); }
+.signal-list em { margin-left: 7px; padding: 3px 5px; color: var(--amber); border: 1px solid var(--amber); font: 700 8px/1 monospace; font-style: normal; }
+.signal-list .up { color: var(--cyan); } .signal-list .down { color: var(--coral); }
+.signal-attribution { padding: 10px; color: var(--amber); background: rgba(255,181,71,.06); font-size: 11px; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .45; }
 a { color: inherit; }

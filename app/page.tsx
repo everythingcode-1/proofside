@@ -8,6 +8,7 @@ export default function Home() {
           <span className="brand-mark">DP</span>
           <span>DreamPulse</span>
         </a>
+        <nav><a href="/">Live Room</a> · <a href="/agents">Agents</a></nav>
         <div className="network-pill"><span /> Somnia testnet</div>
       </header>
 
