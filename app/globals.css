@@ -52,6 +52,12 @@ main { width: min(1180px, calc(100% - 32px)); margin: auto; }
 .agent-orb::after { inset: 11px; border-style: solid; }
 .agent-orb span { width: 5px; height: 5px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 14px var(--amber); }
 .agent-status { color: var(--cyan); font: 700 10px/1 ui-monospace, monospace; letter-spacing: .12em; }
+.agent-status.reconnecting, .agent-status.polling { color: var(--amber); }
+.agent-status.stale, .agent-status.offline { color: var(--coral); }
+.agent-status.reconnecting span, .agent-status.polling span { background: var(--amber); box-shadow: 0 0 14px var(--amber); }
+.agent-status.stale span, .agent-status.offline span { background: var(--coral); box-shadow: 0 0 14px var(--coral); }
+.rollover-note { padding: 11px 18px; border-bottom: 1px solid var(--line); color: var(--amber); background: rgba(255,181,71,.06); font: 700 10px/1.4 ui-monospace, monospace; }
+.rollover-note span { color: var(--paper); }
 
 .room-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(320px, .75fr); }
 .market-panel, .action-panel { padding: clamp(24px, 4vw, 44px); }
@@ -101,7 +107,7 @@ main { width: min(1180px, calc(100% - 32px)); margin: auto; }
 .secondary-button { background: transparent; color: var(--paper); }
 .trade-message { min-height: 38px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .trade-message.confirmed { color: var(--cyan); }
-.trade-message.error { color: var(--coral); }
+.trade-message.blocked, .trade-message.cancelled, .trade-message.reverted, .trade-message.unknown { color: var(--coral); }
 .proof-panel { margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--line); }
 .proof-panel dl { margin: 12px 0 0; }
 .proof-panel dl div { display: flex; justify-content: space-between; padding: 8px 0; font: 11px/1.3 ui-monospace, monospace; }

@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { EIP1193Provider } from "viem"
 import { DREAMDEX } from "@/lib/config"
-import { placeBrowserOrder } from "@/lib/dreamdex"
+import { placeBrowserOrder, watchMarketBook } from "@/lib/dreamdex"
 import { countdownLabel, durationLabel, probabilityLabel } from "@/lib/format"
 import { openingSummary, resultSummary } from "@/lib/lifecycle"
+import { freshnessState, type FreshnessState } from "@/lib/realtime"
+import type { TransactionState } from "@/lib/transactions"
 import type { Direction, MarketView, RoomState, TradeProof } from "@/lib/types"
 
 type MarketResponse = { market?: MarketView; error?: string; fetchedAt: number }
@@ -29,26 +31,38 @@ export function PredictionRoom() {
   const [shares, setShares] = useState("1")
   const [wallet, setWallet] = useState<`0x${string}` | null>(null)
   const [tradeProof, setTradeProof] = useState<TradeProof | null>(null)
-  const [tradeState, setTradeState] = useState<"idle" | "connecting" | "signing" | "confirmed" | "error">("idle")
+  const [tradeState, setTradeState] = useState<TransactionState>("IDLE")
   const [tradeMessage, setTradeMessage] = useState("Connect a wallet to join the room.")
   const [now, setNow] = useState(Date.now())
+  const [streamState, setStreamState] = useState<FreshnessState>("OFFLINE")
+  const [lastVerifiedAt, setLastVerifiedAt] = useState<number | null>(null)
+  const [previousMarketId, setPreviousMarketId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
-    const response = await fetch("/api/market", { cache: "no-store" })
-    const payload = (await response.json()) as MarketResponse
-    if (!response.ok || !payload.market) {
-      setError(payload.error || "DreamDEX market is unavailable.")
-      return
+    try {
+      const response = await fetch("/api/market", { cache: "no-store" })
+      const payload = (await response.json()) as MarketResponse
+      if (!response.ok || !payload.market) {
+        setError(payload.error || "DreamDEX market is unavailable.")
+        return
+      }
+      setError(null)
+      setMarket((current) => {
+        if (current && current.id !== payload.market!.id) setPreviousMarketId(current.id)
+        return payload.market!
+      })
+      setLastVerifiedAt(payload.fetchedAt)
+      const roomResponse = await fetch(`/api/rooms/${payload.market.id}`, { cache: "no-store" })
+      if (roomResponse.ok) setRoom((await roomResponse.json()) as RoomState)
+    } catch {
+      setStreamState("RECONNECTING")
+      setError("DreamPulse is reconnecting to its server and DreamDEX.")
     }
-    setError(null)
-    setMarket(payload.market)
-    const roomResponse = await fetch(`/api/rooms/${payload.market.id}`, { cache: "no-store" })
-    if (roomResponse.ok) setRoom((await roomResponse.json()) as RoomState)
   }, [])
 
   useEffect(() => {
     refresh()
-    const marketTimer = window.setInterval(refresh, 5_000)
+    const marketTimer = window.setInterval(refresh, 15_000)
     const clockTimer = window.setInterval(() => setNow(Date.now()), 1_000)
     return () => {
       window.clearInterval(marketTimer)
@@ -56,16 +70,39 @@ export function PredictionRoom() {
     }
   }, [refresh])
 
+  useEffect(() => {
+    if (!market) return
+    let stop: (() => Promise<void>) | undefined
+    stop = watchMarketBook(
+      market,
+      (update) => {
+        setMarket((current) => current?.id === market.id ? { ...current, upPrice: update.upPrice, downPrice: update.downPrice } : current)
+        setLastVerifiedAt(update.verifiedAt)
+        void refresh()
+      },
+      setStreamState,
+    )
+    return () => { void stop?.() }
+  }, [market?.id, refresh])
+
+  const freshness = freshnessState({
+    connected: streamState === "LIVE",
+    retrying: streamState === "RECONNECTING",
+    hasSnapshot: Boolean(market),
+    lastVerifiedAt,
+    now,
+  })
+
   const provider = () => (window as Window & { ethereum?: EIP1193Provider }).ethereum
 
   const connect = async () => {
     const injected = provider()
     if (!injected) {
-      setTradeState("error")
+      setTradeState("BLOCKED")
       setTradeMessage("No injected EVM wallet was found.")
       return null
     }
-    setTradeState("connecting")
+    setTradeState("PREFLIGHT")
     try {
       await injected.request({ method: "wallet_switchEthereumChain", params: [{ chainId: `0x${DREAMDEX.chainId.toString(16)}` }] }).catch(async () => {
         await injected.request({
@@ -83,11 +120,11 @@ export function PredictionRoom() {
       const account = accounts[0]
       if (!account) throw new Error("No wallet account was selected.")
       setWallet(account)
-      setTradeState("idle")
+      setTradeState("IDLE")
       setTradeMessage("Wallet connected. Choose your conviction or place a verified trade.")
       return account
     } catch (reason) {
-      setTradeState("error")
+      setTradeState("CANCELLED")
       setTradeMessage(reason instanceof Error ? reason.message : "Wallet connection was cancelled.")
       return null
     }
@@ -104,7 +141,7 @@ export function PredictionRoom() {
     })
     const payload = await response.json()
     if (!response.ok) {
-      setTradeState("error")
+      setTradeState("BLOCKED")
       setTradeMessage(payload.error || "Conviction could not be recorded.")
       return
     }
@@ -114,27 +151,42 @@ export function PredictionRoom() {
 
   const trade = async () => {
     if (!market?.isLive) return
+    if (["STALE", "OFFLINE"].includes(freshness)) {
+      setTradeState("BLOCKED")
+      setTradeMessage("Market data is stale. Wait for DreamPulse to reconnect before trading.")
+      return
+    }
     const injected = provider()
     const account = wallet || (await connect())
     if (!injected || !account) return
     const amount = Number(shares)
     if (!Number.isFinite(amount) || amount <= 0) {
-      setTradeState("error")
+      setTradeState("BLOCKED")
       setTradeMessage("Enter a share amount greater than zero.")
       return
     }
-    setTradeState("signing")
-    setTradeMessage("Confirm the DreamDEX IOC order in your wallet…")
+    setTradeState("PREFLIGHT")
+    setTradeMessage("Checking market status, quote, and gas balance…")
     try {
-      const result = await placeBrowserOrder({ provider: injected, market, direction, shares: amount })
+      const result = await placeBrowserOrder({
+        provider: injected,
+        market,
+        direction,
+        shares: amount,
+        onState: (state) => {
+          setTradeState(state)
+          if (state === "AWAITING_SIGNATURE") setTradeMessage("Confirm the DreamDEX IOC order in your wallet…")
+          if (state === "SUBMITTED") setTradeMessage("Order submitted. Waiting for confirmation…")
+        },
+      })
       const proof: TradeProof = {
         hash: result.hash,
         explorerUrl: `${DREAMDEX.explorerUrl}/tx/${result.hash}`,
         status: "confirmed",
       }
       setTradeProof(proof)
-      setTradeState("confirmed")
-      setTradeMessage("Verified DreamDEX order submitted on Somnia.")
+      setTradeState("CONFIRMED")
+      setTradeMessage("DreamDEX transaction confirmed on Somnia. Fill status is separate from confirmation.")
       const response = await fetch(`/api/rooms/${market.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -142,8 +194,11 @@ export function PredictionRoom() {
       })
       if (response.ok) setRoom((await response.json()) as RoomState)
     } catch (reason) {
-      setTradeState("error")
-      setTradeMessage(reason instanceof Error ? reason.message : "The DreamDEX order failed.")
+      const message = reason instanceof Error ? reason.message : "The DreamDEX order failed."
+      const cancelled = /rejected|denied|cancel/i.test(message)
+      const reverted = /revert/i.test(message)
+      setTradeState(cancelled ? "CANCELLED" : reverted ? "REVERTED" : "BLOCKED")
+      setTradeMessage(message)
     }
   }
 
@@ -185,8 +240,14 @@ export function PredictionRoom() {
           <div className="agent-orb"><span /></div>
           <div><p>DreamPulse host</p><small>Autonomous lifecycle agent</small></div>
         </div>
-        <div className="agent-status"><span /> {market.phase === "LIVE" ? "ROOM LIVE" : market.phase}</div>
+        <div className={`agent-status ${freshness.toLowerCase()}`}>
+          <span /> {freshness} · {lastVerifiedAt ? `VERIFIED ${new Date(lastVerifiedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "WAITING"}
+        </div>
       </div>
+
+      {previousMarketId && (
+        <div className="rollover-note">✦ Host opened a new room after market <span>{short(previousMarketId)}</span> left the live venue.</div>
+      )}
 
       <div className="room-grid">
         <div className="market-panel">
@@ -235,12 +296,12 @@ export function PredictionRoom() {
             <div><span>Execution</span><strong>DreamDEX IOC</strong></div>
           </div>
 
-          {!wallet && <button className="primary-button" onClick={connect} disabled={tradeState === "connecting"}>Connect wallet</button>}
+          {!wallet && <button className="primary-button" onClick={connect} disabled={tradeState === "PREFLIGHT"}>Connect wallet</button>}
           {wallet && <button className="secondary-button" onClick={submitConviction} disabled={!market.isLive}>Add conviction only</button>}
-          <button className="trade-button" onClick={trade} disabled={!market.isLive || tradeState === "signing"}>
-            {tradeState === "signing" ? "Waiting for wallet…" : `Trade ${direction} on DreamDEX`}
+          <button className="trade-button" onClick={trade} disabled={!market.isLive || ["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState) || ["STALE", "OFFLINE"].includes(freshness)}>
+            {["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState) ? "Transaction in progress…" : `Trade ${direction} on DreamDEX`}
           </button>
-          <p className={`trade-message ${tradeState}`} aria-live="polite">{tradeMessage}</p>
+          <p className={`trade-message ${tradeState.toLowerCase()}`} aria-live="polite">{tradeMessage}</p>
 
           <div className="proof-panel">
             <div className="section-heading"><span>Onchain proof</span><small>authoritative</small></div>

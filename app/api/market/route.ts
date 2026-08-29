@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { currentMarket } from "@/lib/dreamdex"
+import { getTransitions, recordTransition } from "@/lib/room-store"
 
 export const dynamic = "force-dynamic"
 
@@ -7,7 +8,9 @@ export async function GET() {
   const fetchedAt = Date.now()
   try {
     const market = await currentMarket()
-    return NextResponse.json({ market, fetchedAt }, { headers: { "Cache-Control": "no-store" } })
+    const prior = getTransitions(market.id)[0]?.toPhase ?? null
+    recordTransition(market.id, prior, market.phase, "snapshot", fetchedAt)
+    return NextResponse.json({ market, transitions: getTransitions(market.id), fetchedAt }, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "DreamDEX market read failed.", fetchedAt },
