@@ -90,11 +90,12 @@ export function createAgentStore(filename?: string) {
         .run(input.nonce, input.wallet.toLowerCase(), input.purpose, input.expiresAt)
     },
 
-    consumeChallenge(nonce: string, wallet: string, purpose: string, now = Date.now()) {
+    consumeChallenge(nonce: string, wallet: string, purpose: string, now = Date.now(), expiresAt?: number) {
       const result = db.prepare(`
         UPDATE auth_challenges SET used_at = ?
         WHERE nonce = ? AND wallet = ? AND purpose = ? AND expires_at >= ? AND used_at IS NULL
-      `).run(now, nonce, wallet.toLowerCase(), purpose, now)
+          AND (? IS NULL OR expires_at = ?)
+      `).run(now, nonce, wallet.toLowerCase(), purpose, now, expiresAt ?? null, expiresAt ?? null)
       return Number(result.changes) === 1
     },
 
@@ -224,4 +225,15 @@ export function createAgentStore(filename?: string) {
 
     close() { db.close() },
   }
+}
+
+export type AgentStore = ReturnType<typeof createAgentStore>
+
+let singleton: AgentStore | undefined
+export function getAgentStore() {
+  return (singleton ??= createAgentStore())
+}
+
+export function setAgentStoreForTests(store?: AgentStore) {
+  singleton = store
 }
