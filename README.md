@@ -5,9 +5,12 @@ DreamPulse turns live DreamDEX Event Contracts into autonomous social prediction
 ## What works
 
 - Reads active BTC/ETH binary markets from the DreamDEX venue.
+- Watches the DreamDEX order book through the SDK and reconciles onchain state every 15 seconds.
+- Displays LIVE, POLLING, RECONNECTING, STALE, and OFFLINE freshness states.
 - Verifies the current status directly from the onchain market snapshot.
 - Displays the live YES/NO book, countdown, question, and contract proof.
 - Collects one replaceable UP/DOWN conviction per wallet.
+- Persists convictions and lifecycle history in a local SQLite database across restarts.
 - Connects an injected EVM wallet to Somnia Shannon Testnet.
 - Submits an IOC DreamDEX order through `@somnia-chain/markets-sdk`.
 - Refuses to display a successful trade without a transaction hash.
@@ -53,11 +56,19 @@ DreamPulse never stores private keys and never trades autonomously with user fun
 
 ## MVP limitations
 
-- Convictions use an in-memory single-process store and reset when the server restarts.
+- SQLite uses Node 22's built-in `node:sqlite` module. It is intentionally a single-instance store; move the repository to Postgres before horizontal scaling.
 - The UI selects one earliest-expiring active BTC/ETH room.
 - Order execution is testnet-only and uses deliberate IOC behavior so unfilled remainders do not rest invisibly.
 - The testnet venue currently uses tUSDC rather than mainnet USDso.
 - No custom smart contract, chat system, creator dashboard, token, or delegated wallet is included.
+
+## Health and recovery
+
+`GET /api/health` checks Somnia RPC and the current DreamDEX venue. It returns `200` when healthy, `207` when degraded, and `503` when no authoritative dependency can be reached.
+
+The room subscribes to live order-book changes. If the subscription drops, the UI exposes reconnect/polling status and keeps a 15-second authoritative reconciliation fallback. Trading is disabled when data becomes stale or offline.
+
+Persistent state is stored at `data/dreampulse.sqlite` by default. Override it with `DREAMPULSE_DB`. Back up or remove that file only while the process is stopped.
 
 Add durable storage when deploying multiple server instances. Add creator distribution and embeds only after the complete room loop is validated.
 
