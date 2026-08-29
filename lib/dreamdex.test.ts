@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const loadMarkets = vi.fn(async () => ({}))
 const faucet = vi.fn(async () => ({ hash: "0xabc" }))
 const close = vi.fn(async () => undefined)
+const setSigner = vi.fn()
 
 vi.mock("@somnia-chain/markets-sdk", () => ({
   isBinaryMarket: vi.fn(),
-  SomniaMarkets: vi.fn(() => ({ loadMarkets, trader: { faucet }, close })),
+  SomniaMarkets: vi.fn(() => ({ loadMarkets, setSigner, trader: { faucet }, close })),
 }))
 
 vi.mock("viem", async (importOriginal) => ({
@@ -21,6 +22,7 @@ describe("browserExchange", () => {
     loadMarkets.mockClear()
     faucet.mockClear()
     close.mockClear()
+    setSigner.mockClear()
   })
 
   it("loads the symbol registry before returning a wallet exchange", async () => {
@@ -28,6 +30,9 @@ describe("browserExchange", () => {
     await browserExchange({ request: vi.fn(), on: vi.fn(), removeListener: vi.fn() })
 
     expect(loadMarkets).toHaveBeenCalledOnce()
+    expect(setSigner).toHaveBeenCalledWith(expect.objectContaining({
+      account: "0x0000000000000000000000000000000000000001",
+    }))
   })
 
   it("claims test collateral through the DreamDEX faucet", async () => {

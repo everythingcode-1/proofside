@@ -76,6 +76,7 @@ export async function browserExchange(provider: EIP1193Provider) {
   const [account] = await walletClient.requestAddresses()
   if (!account) throw new Error("No wallet account was selected.")
   const exchange = createExchange(walletClient)
+  exchange.setSigner({ walletClient, account })
   await exchange.loadMarkets()
   return { exchange, walletClient, account }
 }
