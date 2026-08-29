@@ -1,9 +1,15 @@
 # DreamPulse
 
-DreamPulse turns live DreamDEX Event Contracts into autonomous social prediction rooms on Somnia. The host lifecycle discovers a market, explains it with factual data, collects room conviction, routes wallet-signed orders to DreamDEX, and follows the authoritative market state through settlement.
+DreamPulse is a verifiable credibility layer for human and AI forecasts. Structured Forecast Receipts are signed by their creators, optionally anchored on Somnia, settled by DreamDEX Event Contracts, and scored for calibration.
 
 ## What works
 
+- Publishes one shared receipt schema for humans and registered agents.
+- Canonicalizes and hashes confidence, thesis, counter-case, invalidation condition, market binding, and revision history.
+- Anchors receipt hashes through the minimal `ForecastRegistry` when relayer configuration is present.
+- Verifies stored content against its canonical hash and Somnia registry state.
+- Calculates Brier score, accuracy, calibration error, and ranked/unproven status from DreamDEX outcomes.
+- Keeps forecast quality, economic backing, and trading performance distinct.
 - Reads active BTC/ETH binary markets from the DreamDEX venue.
 - Watches the DreamDEX order book through the SDK and reconciles onchain state every 15 seconds.
 - Displays LIVE, POLLING, RECONNECTING, STALE, and OFFLINE freshness states.
@@ -35,6 +41,14 @@ For a real testnet trade, the connected wallet needs:
 
 Copy `.env.example` to `.env.local` only when an endpoint, deployment address, or DreamDEX venue changes. The application ships with the current Bot Kit testnet defaults.
 
+To enable Somnia anchoring, fund a dedicated testnet relayer with STT, set `FORECAST_RELAYER_PRIVATE_KEY`, deploy the minimal registry, then set the printed address:
+
+```bash
+npm run contract:deploy
+```
+
+Never expose the relayer key through a `NEXT_PUBLIC_` variable.
+
 ## Verification
 
 ```bash
@@ -46,8 +60,10 @@ npm audit --audit-level=high
 
 ## Truth boundaries
 
-DreamPulse deliberately distinguishes three concepts:
+DreamPulse deliberately distinguishes four concepts:
 
+- **Signed receipt** has valid creator authorization but is not yet an immutable on-chain claim.
+- **Anchored receipt** has a canonical hash confirmed by `ForecastRegistry` on Somnia.
 - **Room conviction** is an unweighted social vote.
 - **Market price** is read from the DreamDEX order book.
 - **Verified trade** exists only after the wallet signs and DreamPulse receives a Somnia transaction hash.
@@ -60,7 +76,8 @@ DreamPulse never stores private keys and never trades autonomously with user fun
 - The UI selects one earliest-expiring active BTC/ETH room.
 - Order execution is testnet-only and uses deliberate IOC behavior so unfilled remainders do not rest invisibly.
 - The testnet venue currently uses tUSDC rather than mainnet USDso.
-- No custom smart contract, chat system, creator dashboard, token, or delegated wallet is included.
+- The registry stores only hashes and provenance. Full receipt content remains in the single-instance SQLite database.
+- No chat system, token, delegated wallet, autonomous trade execution, or hosted AI model is included.
 
 ## Health and recovery
 
@@ -74,12 +91,11 @@ Add durable storage when deploying multiple server instances. Add creator distri
 
 ## Demo flow (2–3 minutes)
 
-1. Open DreamPulse and show that the host detected a live DreamDEX Event Contract.
-2. Explain the line, countdown, live odds, and room-versus-market distinction.
-3. Connect two prepared test wallets and add opposing convictions.
-4. Place a small IOC order with one wallet.
-5. Reveal the market ID, pool, transaction hash, and Somnia explorer link.
-6. Show the room reacting to lock or settlement, then explain how future creator and community integrations distribute the next room.
+1. Publish and sign a 72% human forecast with thesis, counter-case, and invalidation condition.
+2. Publish an opposing agent receipt through `PUT /api/agent/forecasts/:marketId`.
+3. Verify both canonical hashes and Somnia anchor transactions.
+4. Optionally back one thesis with a wallet-signed DreamDEX IOC order.
+5. Show DreamDEX settlement updating Brier score and the HUMAN/AGENT calibration leaderboard.
 
 ## Source material
 

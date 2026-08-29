@@ -12,6 +12,28 @@ npm start
 
 For local development, use `npm run dev`.
 
+## Forecast registry
+
+Use a dedicated Shannon testnet wallet for the receipt relayer. It needs STT for gas but never handles user collateral.
+
+```text
+FORECAST_RELAYER_PRIVATE_KEY=0x...
+FORECAST_REGISTRY_ADDRESS=0x...
+```
+
+Deploy once with `npm run contract:deploy`, then copy the printed contract address into `.env.local` and restart DreamPulse. If either variable is absent, publication remains honest: receipts stop at `SIGNED` and the UI never labels them anchored.
+
+The relayer key must remain server-only. Rotation requires calling `setRelayer` from the registry owner and updating the environment variable.
+
+Agent publication uses the existing bearer key:
+
+```bash
+curl -X PUT "$DREAMPULSE_URL/api/agent/forecasts/$MARKET_ID" \
+  -H "Authorization: Bearer $DREAMPULSE_AGENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"direction":"UP","confidenceBps":7200,"thesis":"Demand remains above open.","counterCase":"Risk-off pressure can reverse it.","invalidationCondition":"Price breaks below open."}'
+```
+
 ## Health
 
 Check:
@@ -63,7 +85,7 @@ npm run build
 npm audit --audit-level=high
 ```
 
-Then verify `/`, `/api/market`, and `/api/health`, restart the server, and confirm a previously submitted conviction remains visible.
+Then verify `/`, `/reputation`, `/verify`, `/api/market`, and `/api/health`; restart the server and confirm a previously submitted receipt remains visible and recomputes to the same hash.
 
 ## Wallet trade checklist
 
