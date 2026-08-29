@@ -16,7 +16,7 @@ export type CalibrationProfile = {
 
 export function scoreForecast(direction: Direction, confidenceBps: number, outcome: Direction) {
   const probability = confidenceBps / 10_000
-  return (probability - (direction === outcome ? 1 : 0)) ** 2
+  return Number(((probability - (direction === outcome ? 1 : 0)) ** 2).toFixed(12))
 }
 
 export function buildCalibrationProfile(creatorId: string, creatorType: CreatorType, forecasts: SettledForecast[]): CalibrationProfile {
