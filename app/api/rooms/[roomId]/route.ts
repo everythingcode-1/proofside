@@ -3,6 +3,7 @@ import { isAddress, isHash } from "viem"
 import { currentMarket } from "@/lib/dreamdex"
 import { associateTransaction, getRoom, setConviction } from "@/lib/room-store"
 import { createRateLimiter } from "@/lib/rate-limit"
+import { getAgentStore } from "@/lib/agent-store"
 
 type Context = { params: Promise<{ roomId: string }> }
 const rateLimit = createRateLimiter(12, 60_000)
@@ -44,5 +45,6 @@ export async function POST(request: NextRequest, context: Context) {
 
   const direction = body.direction as "UP" | "DOWN"
   if (body.transactionHash) associateTransaction(roomId, body.wallet, direction, body.transactionHash, "CONFIRMED")
+  getAgentStore().appendPrediction({ marketId: roomId, actorType: "HUMAN", actorId: body.wallet, direction, confidence: null, reason: "", createdAt: Date.now() })
   return NextResponse.json(setConviction(roomId, body.wallet, direction, body.transactionHash))
 }

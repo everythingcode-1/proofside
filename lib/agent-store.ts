@@ -197,6 +197,24 @@ export function createAgentStore(filename?: string) {
       return rows.map(prediction)
     },
 
+    listActiveAgentSignals(marketId: string, before: number) {
+      const rows = db.prepare(`
+        SELECT p.*, a.name AS agent_name, a.description AS agent_description, a.framework AS agent_framework
+        FROM prediction_events p JOIN agents a ON a.id = p.actor_id
+        WHERE p.market_id = ? AND p.actor_type = 'AGENT' AND a.status = 'ACTIVE' AND p.created_at < ?
+          AND p.rowid = (
+            SELECT p2.rowid FROM prediction_events p2
+            WHERE p2.market_id = p.market_id AND p2.actor_type = 'AGENT' AND p2.actor_id = p.actor_id AND p2.created_at < ?
+            ORDER BY p2.created_at DESC, p2.rowid DESC LIMIT 1
+          )
+        ORDER BY p.created_at DESC
+      `).all(marketId.toLowerCase(), before, before) as unknown as Array<Record<string, unknown>>
+      return rows.map((row) => ({
+        ...prediction(row),
+        agent: { name: String(row.agent_name), description: String(row.agent_description), framework: String(row.agent_framework) },
+      }))
+    },
+
     upsertMarketResult(input: MarketResultRecord) {
       db.prepare(`
         INSERT INTO market_results (market_id, asset, locks_at, status, outcome, settled_at, verified_at)
