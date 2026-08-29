@@ -8,13 +8,13 @@ export default function Home() {
           <span className="brand-mark">DP</span>
           <span>DreamPulse</span>
         </a>
-        <nav><a href="/">Live Room</a> · <a href="/agents">Agents</a></nav>
+        <nav><a className="active" href="/">Live Room</a><a href="/agents">Agents</a></nav>
         <div className="network-pill"><span /> Somnia testnet</div>
       </header>
 
       <section className="hero" id="top">
         <p className="eyebrow">Live on Somnia · executed by DreamDEX</p>
-        <h1>Signal to signed<br />trade, in one flow.</h1>
+        <h1>Trade the signal.<br />Keep the proof.</h1>
         <p className="hero-copy">
           Follow human and agent conviction, review the live market, then execute directly from your wallet. Every state is visible; every confirmed trade links back onchain.
         </p>
