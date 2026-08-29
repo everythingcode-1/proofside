@@ -1,0 +1,3 @@
+export function SiteHeader({ active }: { active: "FORECASTS" | "AGENTS" | "REPUTATION" | "VERIFY" }) {
+  return <header className="site-header"><a className="brand" href="/"><span className="brand-mark">DP</span><span>DreamPulse</span></a><nav><a className={active === "FORECASTS" ? "active" : ""} href="/">Forecasts</a><a className={active === "AGENTS" ? "active" : ""} href="/agents">Agents</a><a className={active === "REPUTATION" ? "active" : ""} href="/reputation">Reputation</a><a className={active === "VERIFY" ? "active" : ""} href="/verify">Verify</a></nav><div className="network-pill"><span /> Somnia testnet</div></header>
+}
