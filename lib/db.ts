@@ -93,6 +93,42 @@ export function openDatabase(filename = process.env.DREAMPULSE_DB || path.join(p
       signal_id TEXT,
       verified_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS forecast_receipts (
+      id TEXT PRIMARY KEY,
+      schema_version INTEGER NOT NULL,
+      creator_type TEXT NOT NULL CHECK (creator_type IN ('HUMAN', 'AGENT')),
+      creator_id TEXT NOT NULL,
+      creator_wallet TEXT NOT NULL,
+      market_id TEXT NOT NULL,
+      market_id_hash TEXT NOT NULL,
+      direction TEXT NOT NULL CHECK (direction IN ('UP', 'DOWN')),
+      confidence_bps INTEGER NOT NULL CHECK (confidence_bps BETWEEN 100 AND 9900),
+      thesis TEXT NOT NULL,
+      counter_case TEXT NOT NULL,
+      invalidation_condition TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      locks_at INTEGER NOT NULL,
+      revision INTEGER NOT NULL,
+      previous_receipt_hash TEXT,
+      canonical_hash TEXT NOT NULL UNIQUE,
+      authorization_type TEXT NOT NULL,
+      authorization_value TEXT NOT NULL,
+      proof_state TEXT NOT NULL,
+      anchor_tx_hash TEXT,
+      anchor_block INTEGER,
+      anchored_at INTEGER,
+      backing_tx_hash TEXT,
+      UNIQUE (market_id, creator_type, creator_id, revision)
+    );
+    CREATE INDEX IF NOT EXISTS forecast_creator ON forecast_receipts (creator_type, creator_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS forecast_resolutions (
+      receipt_hash TEXT PRIMARY KEY REFERENCES forecast_receipts(canonical_hash),
+      outcome TEXT CHECK (outcome IN ('UP', 'DOWN') OR outcome IS NULL),
+      status TEXT NOT NULL,
+      resolved_at INTEGER NOT NULL,
+      brier_score REAL,
+      scored_at INTEGER NOT NULL
+    );
   `)
   return db
 }
