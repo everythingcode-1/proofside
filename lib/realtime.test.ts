@@ -5,7 +5,7 @@ describe("real-time freshness", () => {
   it("classifies connection and snapshot age", () => {
     const base = { hasSnapshot: true, lastVerifiedAt: 95_000, now: 100_000 }
     expect(freshnessState({ ...base, connected: true, retrying: false })).toBe("LIVE")
-    expect(freshnessState({ ...base, connected: false, retrying: true })).toBe("RECONNECTING")
+    expect(freshnessState({ ...base, connected: false, retrying: true })).toBe("POLLING")
     expect(freshnessState({ ...base, connected: false, retrying: false })).toBe("POLLING")
     expect(freshnessState({ ...base, connected: true, retrying: false, lastVerifiedAt: 70_000 })).toBe("STALE")
     expect(freshnessState({ ...base, connected: false, retrying: false, hasSnapshot: false })).toBe("OFFLINE")

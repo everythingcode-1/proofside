@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { EIP1193Provider } from "viem"
 import { DREAMDEX } from "@/lib/config"
-import { faucetBrowserCollateral, placeBrowserOrder, watchMarketBook } from "@/lib/dreamdex"
+import { browserPortfolio, faucetBrowserCollateral, placeBrowserOrder, watchMarketBook, type PortfolioView } from "@/lib/dreamdex"
 import { countdownLabel, durationLabel, probabilityLabel } from "@/lib/format"
 import { openingSummary, resultSummary } from "@/lib/lifecycle"
 import { freshnessState, type FreshnessState } from "@/lib/realtime"
@@ -11,6 +11,7 @@ import type { TransactionState } from "@/lib/transactions"
 import type { Direction, MarketView, RoomState, TradeProof } from "@/lib/types"
 
 type MarketResponse = { market?: MarketView; error?: string; fetchedAt: number }
+type Activity = { kind: "FAUCET" | "ORDER"; hash: `0x${string}`; detail: string }
 
 const emptyRoom = (roomId = "pending"): RoomState => ({
   roomId,
@@ -37,6 +38,8 @@ export function PredictionRoom() {
   const [streamState, setStreamState] = useState<FreshnessState>("OFFLINE")
   const [lastVerifiedAt, setLastVerifiedAt] = useState<number | null>(null)
   const [previousMarketId, setPreviousMarketId] = useState<string | null>(null)
+  const [portfolio, setPortfolio] = useState<PortfolioView | null>(null)
+  const [activities, setActivities] = useState<Activity[]>([])
 
   const refresh = useCallback(async () => {
     try {
@@ -95,6 +98,16 @@ export function PredictionRoom() {
 
   const provider = () => (window as Window & { ethereum?: EIP1193Provider }).ethereum
 
+  const refreshPortfolio = async (account: `0x${string}`, currentMarket = market) => {
+    const injected = provider()
+    if (!injected || !currentMarket || !account) return
+    try {
+      setPortfolio(await browserPortfolio(injected, currentMarket))
+    } catch {
+      // A portfolio read must never turn a confirmed write into a failed trade.
+    }
+  }
+
   const connect = async () => {
     const injected = provider()
     if (!injected) {
@@ -120,6 +133,7 @@ export function PredictionRoom() {
       const account = accounts[0]
       if (!account) throw new Error("No wallet account was selected.")
       setWallet(account)
+      if (market) void refreshPortfolio(account, market)
       setTradeState("IDLE")
       setTradeMessage("Wallet connected. Choose your conviction or place a verified trade.")
       return account
@@ -164,6 +178,8 @@ export function PredictionRoom() {
       })
       setTradeState("CONFIRMED")
       setTradeMessage("10,000 tUSDC added to your wallet. You can now trade on DreamDEX.")
+      setActivities((current) => [{ kind: "FAUCET", hash: result.hash, detail: "10,000 tUSDC claimed" }, ...current])
+      await refreshPortfolio(account)
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "The tUSDC faucet transaction failed."
       setTradeState(/rejected|denied|cancel/i.test(message) ? "CANCELLED" : /revert/i.test(message) ? "REVERTED" : "BLOCKED")
@@ -208,7 +224,21 @@ export function PredictionRoom() {
       }
       setTradeProof(proof)
       setTradeState("CONFIRMED")
-      setTradeMessage("DreamDEX transaction confirmed on Somnia. Fill status is separate from confirmation.")
+      const execution = result.execution
+      const price = execution.averagePrice === null ? "" : ` at ${(execution.averagePrice * 100).toFixed(1)}¢`
+      setTradeMessage(
+        execution.status === "FILLED"
+          ? `FILLED · ${execution.filled} ${direction} contract${execution.filled === 1 ? "" : "s"}${price}.`
+          : execution.status === "PARTIAL"
+            ? `PARTIAL · ${execution.filled} of ${execution.requested} contracts filled${price}.`
+            : "UNFILLED · The IOC transaction confirmed but found no executable liquidity.",
+      )
+      setActivities((current) => [{
+        kind: "ORDER",
+        hash: result.hash,
+        detail: `${execution.status} · ${execution.filled}/${execution.requested} ${direction}${price}`,
+      }, ...current])
+      await refreshPortfolio(account)
       const response = await fetch(`/api/rooms/${market.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -313,6 +343,8 @@ export function PredictionRoom() {
           <div className="amount-input"><input id="shares" inputMode="decimal" value={shares} onChange={(event) => setShares(event.target.value)} /><span>contracts</span></div>
 
           <div className="risk-box">
+            <div><span>Wallet balance</span><strong>{portfolio ? `${portfolio.collateral.toLocaleString(undefined, { maximumFractionDigits: 3 })} ${portfolio.collateralCode}` : "—"}</strong></div>
+            <div><span>UP / DOWN held</span><strong>{portfolio ? `${portfolio.upShares} / ${portfolio.downShares}` : "—"}</strong></div>
             <div><span>Live price</span><strong>{probabilityLabel(selectedPrice)}</strong></div>
             <div><span>Maximum loss</span><strong>{maxLoss === null ? "—" : `${maxLoss.toFixed(2)} tUSDC`}</strong></div>
             <div><span>Execution</span><strong>DreamDEX IOC</strong></div>
@@ -336,6 +368,12 @@ export function PredictionRoom() {
               <div><dt>Pool</dt><dd title={market.contractAddress}>{short(market.contractAddress)}</dd></div>
               <div><dt>Transaction</dt><dd>{tradeProof ? <a href={tradeProof.explorerUrl} target="_blank" rel="noreferrer">{short(tradeProof.hash)} ↗</a> : "Not submitted"}</dd></div>
             </dl>
+            {activities.length > 0 && <dl>
+              {activities.slice(0, 4).map((activity) => <div key={`${activity.kind}-${activity.hash}`}>
+                <dt>{activity.kind}</dt>
+                <dd><a href={`${DREAMDEX.explorerUrl}/tx/${activity.hash}`} target="_blank" rel="noreferrer" title={activity.detail}>{activity.detail} ↗</a></dd>
+              </div>)}
+            </dl>}
           </div>
         </aside>
       </div>

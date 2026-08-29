@@ -1,4 +1,4 @@
-import { isBinaryMarket, SomniaMarkets, type UnifiedMarket } from "@somnia-chain/markets-sdk"
+import { isBinaryMarket, SomniaMarkets, type UnifiedBalances, type UnifiedMarket, type UnifiedOrder } from "@somnia-chain/markets-sdk"
 import { createPublicClient, createWalletClient, custom, http, type EIP1193Provider, type Hex, type WalletClient } from "viem"
 import { DREAMDEX, somniaTestnet } from "./config"
 import { phaseFromStatus } from "./lifecycle"
@@ -16,6 +16,53 @@ const createExchange = (walletClient?: WalletClient) =>
   })
 
 const sameVenue = (value?: string | null) => value?.toLowerCase() === DREAMDEX.venueId.toLowerCase()
+
+export type OrderExecution = {
+  status: "FILLED" | "PARTIAL" | "UNFILLED"
+  requested: number
+  filled: number
+  remaining: number
+  averagePrice: number | null
+}
+
+export type PortfolioView = {
+  collateral: number
+  collateralCode: string
+  upShares: number
+  downShares: number
+}
+
+export function orderExecution(order: Pick<UnifiedOrder, "amount" | "filled" | "remaining" | "price" | "status" | "info">): OrderExecution {
+  const fills = ((order.info as { fills?: { quantityFilled: bigint; fillPrice: bigint }[] })?.fills || [])
+  const quantity = fills.reduce((sum, fill) => sum + Number(fill.quantityFilled), 0)
+  const averagePrice = quantity
+    ? fills.reduce((sum, fill) => sum + Number(fill.quantityFilled) * Number(fill.fillPrice), 0) / quantity / 10 ** DREAMDEX.decimals
+    : null
+  return {
+    status: order.filled <= 0 ? "UNFILLED" : order.remaining > 0 ? "PARTIAL" : "FILLED",
+    requested: order.amount,
+    filled: order.filled,
+    remaining: order.remaining,
+    averagePrice,
+  }
+}
+
+export function portfolioFromBalances(
+  balances: UnifiedBalances,
+  market: Pick<MarketView, "yesSymbol" | "noSymbol">,
+): PortfolioView {
+  const quote = market.yesSymbol.split("/")[1]?.split("#")[0]
+  const collateralCode = Object.keys(balances).find((code) => code.toLowerCase() === quote?.toLowerCase())
+    || Object.keys(balances).find((code) => code.toLowerCase().includes("usdc"))
+    || quote
+    || "tUSDC"
+  return {
+    collateral: balances[collateralCode]?.total || 0,
+    collateralCode,
+    upShares: balances[market.yesSymbol]?.total || 0,
+    downShares: balances[market.noSymbol]?.total || 0,
+  }
+}
 
 export async function currentMarket(): Promise<MarketView> {
   const exchange = createExchange()
@@ -90,6 +137,15 @@ export async function faucetBrowserCollateral(provider: EIP1193Provider) {
   }
 }
 
+export async function browserPortfolio(provider: EIP1193Provider, market: Pick<MarketView, "yesSymbol" | "noSymbol">) {
+  const { exchange } = await browserExchange(provider)
+  try {
+    return portfolioFromBalances(await exchange.fetchBalance(), market)
+  } finally {
+    await Promise.race([exchange.close(), new Promise((resolve) => setTimeout(resolve, 1_500))]).catch(() => undefined)
+  }
+}
+
 export function watchMarketBook(
   market: MarketView,
   onUpdate: (prices: { upPrice: number | null; downPrice: number | null; verifiedAt: number }) => void,
@@ -158,7 +214,7 @@ export async function placeBrowserOrder(input: {
     if (!hash) throw new Error("DreamDEX did not return a transaction hash; the order is not shown as confirmed.")
     input.onState?.("SUBMITTED", hash)
     input.onState?.("CONFIRMED", hash)
-    return { hash, account }
+    return { hash, account, execution: orderExecution(result) }
   } finally {
     await Promise.race([exchange.close(), new Promise((resolve) => setTimeout(resolve, 1_500))]).catch(() => undefined)
   }
