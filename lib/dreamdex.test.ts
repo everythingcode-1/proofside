@@ -48,6 +48,15 @@ describe("browserExchange", () => {
 })
 
 describe("DreamDEX account views", () => {
+  it("selects the same market when BTC and ETH share an expiry", async () => {
+    const { sortMarketCandidates } = await import("./dreamdex")
+    const btc = { symbol: "BTC", info: { expiry: 200, marketId: "0x02" } }
+    const eth = { symbol: "ETH", info: { expiry: 200, marketId: "0x01" } }
+
+    expect(sortMarketCandidates([btc, eth] as never[])[0]).toBe(eth)
+    expect(sortMarketCandidates([eth, btc] as never[])[0]).toBe(eth)
+  })
+
   it("summarizes a partial fill using receipt fills", async () => {
     const { orderExecution } = await import("./dreamdex")
     const execution = orderExecution({

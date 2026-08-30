@@ -19,6 +19,16 @@ const createExchange = (walletClient?: WalletClient) =>
 
 const sameVenue = (value?: string | null) => value?.toLowerCase() === DREAMDEX.venueId.toLowerCase()
 
+export function sortMarketCandidates(markets: UnifiedMarket[]) {
+  return [...markets].sort((a, b) => {
+    const aInfo = a.info as { expiry?: number | string; marketId?: string }
+    const bInfo = b.info as { expiry?: number | string; marketId?: string }
+    const byExpiry = Number(aInfo.expiry ?? 0) - Number(bInfo.expiry ?? 0)
+    if (byExpiry !== 0) return byExpiry
+    return String(aInfo.marketId ?? a.symbol).localeCompare(String(bInfo.marketId ?? b.symbol))
+  })
+}
+
 export type OrderExecution = {
   status: "FILLED" | "PARTIAL" | "UNFILLED"
   requested: number
@@ -82,8 +92,7 @@ export async function currentMarket(): Promise<MarketView> {
     )
     const scoped = live.filter((market) => isBinaryMarket(market.info) && sameVenue(market.info.venueId))
     const venues = [...new Set(live.map((market) => isBinaryMarket(market.info) ? market.info.venueId?.toLowerCase() : null).filter(Boolean))]
-    const candidates = (scoped.length ? scoped : venues.length === 1 ? live : [])
-      .sort((a, b) => Number(isBinaryMarket(a.info) ? a.info.expiry : 0) - Number(isBinaryMarket(b.info) ? b.info.expiry : 0))
+    const candidates = sortMarketCandidates(scoped.length ? scoped : venues.length === 1 ? live : [])
 
     const market = candidates[0]
     if (!market || !isBinaryMarket(market.info)) {
