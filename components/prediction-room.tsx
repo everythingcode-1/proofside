@@ -11,6 +11,7 @@ import type { TransactionState } from "@/lib/transactions"
 import type { Direction, MarketView, RoomState, TradeProof } from "@/lib/types"
 import { pulseStage, speedLabel } from "@/lib/pulse-ui"
 import { PulseRail } from "@/components/pulse-rail"
+import { MarketOracleChart } from "@/components/market-oracle-chart"
 
 type MarketResponse = { market?: MarketView; error?: string; fetchedAt: number }
 type Activity = { kind: "FAUCET" | "ORDER"; hash: `0x${string}`; detail: string }
@@ -342,6 +343,8 @@ export function PredictionRoom() {
             <span>Line to beat</span>
             <strong>{market.strike}</strong>
           </div>
+
+          <MarketOracleChart marketId={market.id} asset={market.asset} />
 
           <div className="odds-grid">
             <button className={`odds-card up ${direction === "UP" ? "selected" : ""}`} onClick={() => setDirection("UP")} disabled={!market.isLive}>
