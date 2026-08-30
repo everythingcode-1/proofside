@@ -11,13 +11,10 @@ export function MarketOracleChart({ market }: { market: Pick<MarketView, "id" | 
   const { id: marketId, asset } = market
   const [chart, setChart] = useState<OracleChartView | null>(null), [error, setError] = useState<string | null>(null)
   const [stream, setStream] = useState<{ state: "CONNECTING" | "LIVE" | "OFFLINE"; block: number | null; sourceAge: number | null }>({ state: "CONNECTING", block: null, sourceAge: null })
-  const refreshing = useRef(false)
   const liveTick = useRef<OracleLiveTick | null>(null)
-  const refresh = useCallback(async () => {
-    if (refreshing.current) return
-    refreshing.current = true
+  const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await fetch(`/api/markets/${encodeURIComponent(marketId)}/chart`, { cache: "no-store" })
+      const response = await fetch(`/api/markets/${encodeURIComponent(marketId)}/chart`, { cache: "no-store", signal })
       const body = await response.json(); if (!response.ok) throw new Error(body.message || "Oracle chart unavailable.")
       const next = body.chart as OracleChartView
       setChart((current) => {
@@ -25,20 +22,29 @@ export function MarketOracleChart({ market }: { market: Pick<MarketView, "id" | 
         return liveTick.current ? applyLiveOracleTick(merged, liveTick.current) : merged
       })
       setError(null)
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Oracle chart unavailable.") }
-    finally { refreshing.current = false }
+    } catch (reason) {
+      if (reason instanceof DOMException && reason.name === "AbortError") return
+      setError(reason instanceof Error ? reason.message : "Oracle chart unavailable.")
+    }
   }, [marketId])
-  useEffect(() => { setChart(null); setError(null); liveTick.current = null; void refresh(); const timer = window.setInterval(refresh, 30_000); return () => window.clearInterval(timer) }, [refresh])
+  useEffect(() => {
+    const controller = new AbortController()
+    setError(null)
+    liveTick.current = null
+    void refresh(controller.signal)
+    const timer = window.setInterval(() => void refresh(controller.signal), 10_000)
+    return () => { controller.abort(); window.clearInterval(timer) }
+  }, [refresh])
   useEffect(() => {
     const stop = watchOraclePrice(asset, (tick) => {
       liveTick.current = tick
-      setChart((current) => current ? applyLiveOracleTick(current, tick) : seedOracleChart(market, tick))
+      setChart((current) => current?.marketId === marketId ? applyLiveOracleTick(current, tick) : seedOracleChart(market, tick))
       const sourceTime = tick.sourceUpdatedAtMs ?? tick.blockTimestamp * 1000
       setStream({ state: "LIVE", block: tick.blockNumber, sourceAge: Math.max(0, tick.receivedAt - sourceTime) })
     }, (state) => setStream((current) => ({ ...current, state })))
     return () => { void stop() }
   }, [asset, marketId, market.opensAt, market.locksAt, market.strike])
-  if (!chart) return <section className="oracle-chart loading" aria-live="polite"><div><span>{asset} / USDC</span><strong>{error || "Reading Somnia oracle…"}</strong></div>{error && <button onClick={refresh}>Retry</button>}</section>
+  if (!chart) return <section className="oracle-chart loading" aria-live="polite"><div><span>{asset} / USDC</span><strong>{error || "Reading Somnia oracle…"}</strong></div>{error && <button onClick={() => void refresh()}>Retry</button>}</section>
   const above = chart.change !== null && chart.change >= 0
   const summary = chart.currentPrice === null ? `${asset} oracle has no candle data.` : `${asset} is ${price(Math.abs(chart.change ?? 0))} ${above ? "above" : "below"} its opening reference.`
   return <section className={`oracle-chart ${chart.freshness.toLowerCase()}`} aria-label={summary}>

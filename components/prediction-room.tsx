@@ -12,6 +12,7 @@ import type { Direction, MarketView, RoomState, TradeProof } from "@/lib/types"
 import { pulseStage, speedLabel } from "@/lib/pulse-ui"
 import { PulseRail } from "@/components/pulse-rail"
 import { MarketOracleChart } from "@/components/market-oracle-chart"
+import { marketRefreshDelay } from "@/lib/live-refresh"
 
 type MarketResponse = { market?: MarketView; error?: string; fetchedAt: number }
 type Activity = { kind: "FAUCET" | "ORDER"; hash: `0x${string}`; detail: string }
@@ -48,8 +49,14 @@ export function PredictionRoom() {
   const [attribution, setAttribution] = useState<{ agent: string; signal: string; name?: string } | null>(null)
   const [verificationMs, setVerificationMs] = useState<number | null>(null)
   const actionStartedAt = useRef<number | null>(null)
+  const marketRef = useRef<MarketView | null>(null)
+  const refreshingMarket = useRef(false)
+
+  useEffect(() => { marketRef.current = market }, [market])
 
   const refresh = useCallback(async () => {
+    if (refreshingMarket.current) return
+    refreshingMarket.current = true
     try {
       const response = await fetch("/api/market", { cache: "no-store" })
       const payload = (await response.json()) as MarketResponse
@@ -58,27 +65,39 @@ export function PredictionRoom() {
         return
       }
       setError(null)
+      marketRef.current = payload.market
       setMarket((current) => {
         if (current && current.id !== payload.market!.id) setPreviousMarketId(current.id)
         return payload.market!
       })
       setLastVerifiedAt(payload.fetchedAt)
-      const roomResponse = await fetch(`/api/rooms/${payload.market.id}`, { cache: "no-store" })
+      const [roomResponse, signalResponse] = await Promise.all([
+        fetch(`/api/rooms/${payload.market.id}`, { cache: "no-store" }),
+        fetch(`/api/markets/${payload.market.id}/signals`, { cache: "no-store" }),
+      ])
       if (roomResponse.ok) setRoom((await roomResponse.json()) as RoomState)
-      const signalResponse = await fetch(`/api/markets/${payload.market.id}/signals`, { cache: "no-store" })
       if (signalResponse.ok) setSignals(((await signalResponse.json()) as { signals: AgentSignal[] }).signals)
     } catch {
       setStreamState("RECONNECTING")
       setError("DreamPulse is reconnecting to its server and DreamDEX.")
+    } finally {
+      refreshingMarket.current = false
     }
   }, [])
 
   useEffect(() => {
-    refresh()
-    const marketTimer = window.setInterval(refresh, 15_000)
+    let stopped = false
+    let marketTimer: number | undefined
+    const schedule = async () => {
+      await refresh()
+      if (stopped) return
+      marketTimer = window.setTimeout(schedule, marketRefreshDelay(marketRef.current?.locksAt ?? null, Date.now()))
+    }
+    void schedule()
     const clockTimer = window.setInterval(() => setNow(Date.now()), 1_000)
     return () => {
-      window.clearInterval(marketTimer)
+      stopped = true
+      if (marketTimer) window.clearTimeout(marketTimer)
       window.clearInterval(clockTimer)
     }
   }, [refresh])
@@ -91,12 +110,11 @@ export function PredictionRoom() {
       (update) => {
         setMarket((current) => current?.id === market.id ? { ...current, upPrice: update.upPrice, downPrice: update.downPrice } : current)
         setLastVerifiedAt(update.verifiedAt)
-        void refresh()
       },
       setStreamState,
     )
     return () => { void stop?.() }
-  }, [market?.id, refresh])
+  }, [market?.id])
 
   useEffect(() => {
     if (!market) return
