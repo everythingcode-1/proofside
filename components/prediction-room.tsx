@@ -9,8 +9,7 @@ import { resultSummary } from "@/lib/lifecycle"
 import { freshnessState, type FreshnessState } from "@/lib/realtime"
 import type { TransactionState } from "@/lib/transactions"
 import type { Direction, MarketView, RoomState, TradeProof } from "@/lib/types"
-import { pulseStage, speedLabel } from "@/lib/pulse-ui"
-import { PulseRail } from "@/components/pulse-rail"
+import { speedLabel } from "@/lib/pulse-ui"
 import { MarketOracleChart } from "@/components/market-oracle-chart"
 import { marketRefreshDelay } from "@/lib/live-refresh"
 import { ForecastComposer } from "@/components/forecast-composer"
@@ -334,16 +333,14 @@ export function PredictionRoom() {
 
   const selectedPrice = direction === "UP" ? market.upPrice : market.downPrice
   const maxLoss = selectedPrice === null ? null : Number(shares || 0) * selectedPrice
-  const currentPulseStage = pulseStage(freshness, tradeState)
-
   return (
     <section className="room-shell" aria-label="Live DreamPulse room">
-      <div className="live-console">
-        <div><span className={`live-dot ${freshness.toLowerCase()}`} /> <strong>Somnia · 50312</strong><small>{freshnessLabel}</small></div>
-        <div><small>Market data</small><strong>{lastVerifiedAt ? new Date(lastVerifiedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</strong></div>
-        <div><small>Execution</small><strong>{tradeState === "CONFIRMED" ? speedLabel(verificationMs) : wallet ? "Wallet ready" : "Wallet required"}</strong></div>
+      <div className="market-status-bar" aria-live="polite">
+        <div className="status-source"><span className={`live-dot ${freshness.toLowerCase()}`} /><span><small>Live market</small><strong>{freshnessLabel}</strong></span></div>
+        <div><small>Somnia network</small><strong>50312</strong></div>
+        <div><small>Last market update</small><strong>{lastVerifiedAt ? new Date(lastVerifiedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</strong></div>
+        <div><small>Wallet</small><strong>{tradeState === "CONFIRMED" ? speedLabel(verificationMs) : wallet ? "Ready" : "Not connected"}</strong></div>
       </div>
-      <PulseRail stage={currentPulseStage} status={`Execution flow: ${currentPulseStage.toLowerCase()}`} />
 
       {previousMarketId && (
         <div className="rollover-note">✦ Host opened a new room after market <span>{short(previousMarketId)}</span> left the live venue.</div>
