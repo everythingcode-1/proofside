@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest"
 import { buildOracleChartView } from "./oracle-chart"
+import { DREAMDEX } from "./config"
 
 const market = { id: "m1", asset: "BTC" as const, opensAt: 1000, locksAt: 1600, strike: "Opening price" }
 const candle = (bucketStart: number, open: number, close: number) => ({ asset: "BTC", resolution: "M1" as const, bucketStart, open, high: Math.max(open, close) + 1, low: Math.min(open, close) - 1, close, emaClose: close, count: 3 })
 
 describe("oracle chart", () => {
+  it("configures the official USDC Somnia price feed", () => {
+    expect(DREAMDEX.priceFeed).toEqual({ url: "https://price-feed.dev.oracle.somnia.host/v1/graphql", quote: "USDC" })
+  })
   it("derives opening, current, and change from oracle candles", () => {
     const view = buildOracleChartView(market, [candle(1000, 100, 101), candle(1060, 101, 103)], 1_120_000)
     expect(view).toMatchObject({ asset: "BTC", quote: "USDC", openingPrice: 100, currentPrice: 103, change: 3, changePercent: 3, freshness: "LIVE" })

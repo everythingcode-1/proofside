@@ -13,6 +13,7 @@ const createExchange = (walletClient?: WalletClient) =>
     chain: somniaTestnet,
     wsRpcUrl: DREAMDEX.wsUrl,
     addresses: DREAMDEX.addresses,
+    priceFeed: DREAMDEX.priceFeed,
     walletClient,
   })
 

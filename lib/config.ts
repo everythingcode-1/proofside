@@ -8,6 +8,10 @@ export const DREAMDEX = {
   rpcUrl: process.env.NEXT_PUBLIC_SOMNIA_RPC_URL || "https://api.infra.testnet.somnia.network",
   wsUrl: process.env.NEXT_PUBLIC_SOMNIA_WS_URL || "wss://api.infra.testnet.somnia.network/ws",
   indexerUrl: process.env.NEXT_PUBLIC_DREAMDEX_INDEXER_URL || "https://dev.smk.somnia.host/v1/graphql",
+  priceFeed: {
+    url: process.env.NEXT_PUBLIC_SOMNIA_PRICE_FEED_URL || "https://price-feed.dev.oracle.somnia.host/v1/graphql",
+    quote: "USDC",
+  },
   venueId:
     process.env.NEXT_PUBLIC_DREAMDEX_VENUE_ID ||
     "0x679795a0195a1b76cdebb7c51d74e058aee92919b8c3389af86ef24535e8a28c",
