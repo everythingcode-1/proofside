@@ -1,11 +1,10 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { EIP1193Provider } from "viem"
 import { DREAMDEX } from "@/lib/config"
 import { browserPortfolio, faucetBrowserCollateral, placeBrowserOrder, watchMarketBook, type PortfolioView } from "@/lib/dreamdex"
 import { countdownLabel, durationLabel, probabilityLabel } from "@/lib/format"
-import { resultSummary } from "@/lib/lifecycle"
 import { freshnessState, type FreshnessState } from "@/lib/realtime"
 import type { TransactionState } from "@/lib/transactions"
 import type { Direction, MarketView, RoomState, TradeProof } from "@/lib/types"
@@ -15,7 +14,6 @@ import { marketRefreshDelay } from "@/lib/live-refresh"
 import { ForecastComposer } from "@/components/forecast-composer"
 import { ReceiptCard } from "@/components/receipt-card"
 import type { StoredForecast } from "@/lib/forecast-store"
-import { dreamPulseInterpretation } from "@/lib/market-provenance"
 
 type MarketResponse = { market?: MarketView; error?: string; fetchedAt: number }
 type Activity = { kind: "FAUCET" | "ORDER"; hash: `0x${string}`; detail: string }
@@ -52,11 +50,15 @@ export function PredictionRoom() {
   const [attribution, setAttribution] = useState<{ agent: string; signal: string; name?: string } | null>(null)
   const [verificationMs, setVerificationMs] = useState<number | null>(null)
   const [createdReceipt, setCreatedReceipt] = useState<StoredForecast | null>(null)
+  const [decisionBaseline, setDecisionBaseline] = useState<{ marketId: string; upPrice: number | null } | null>(null)
   const actionStartedAt = useRef<number | null>(null)
   const marketRef = useRef<MarketView | null>(null)
   const refreshingMarket = useRef(false)
 
   useEffect(() => { marketRef.current = market }, [market])
+  useEffect(() => {
+    if (market && decisionBaseline?.marketId !== market.id) setDecisionBaseline({ marketId: market.id, upPrice: market.upPrice })
+  }, [market, decisionBaseline?.marketId])
 
   const refresh = useCallback(async () => {
     if (refreshingMarket.current) return
@@ -310,16 +312,6 @@ export function PredictionRoom() {
     }
   }
 
-  const hostText = useMemo(() => {
-    if (!market) return "Scanning the DreamDEX venue for the next live room…"
-    if (market.phase === "SETTLED" && market.outcome) {
-      const crowdWon = market.outcome === "UP" ? room.upPercent : room.downPercent
-      return resultSummary({ asset: market.asset, outcome: market.outcome, crowdWon })
-    }
-    if (market.phase === "VOID") return "DreamDEX voided this contract. No winning direction is declared."
-    return dreamPulseInterpretation(market, room)
-  }, [market, room])
-
   if (!market) {
     return (
       <section className="room-shell unavailable" aria-live="polite">
@@ -371,25 +363,26 @@ export function PredictionRoom() {
             </button>
           </div>
 
-          <div className="host-note">
-            <div><small>DreamPulse interpretation</small><p>{hostText}</p></div>
-          </div>
-
-          {signals.length > 0 && <div className="signal-list"><div className="section-heading"><span>DreamPulse agent signals</span><small>auditable · not trades</small></div>{signals.map((signal) => <button key={signal.id} onClick={() => { setDirection(signal.direction); setAttribution({ agent: signal.actorId, signal: signal.id, name: signal.agent.name }) }}><span><b>{signal.agent.name}</b> <em>AGENT</em><small>{signal.reason || signal.agent.framework}</small></span><strong className={signal.direction.toLowerCase()}>{signal.direction} {signal.confidence === null ? "" : `${signal.confidence}%`}</strong></button>)}</div>}
-
-          <div className="crowd-card">
-            <div className="section-heading"><span>DreamPulse social signal</span><small>{room.participants} participants</small></div>
-            <div className="conviction-bar"><span style={{ width: `${room.upPercent}%` }} /></div>
-            <div className="conviction-labels"><strong>▲ {room.upPercent}% UP</strong><strong>▼ {room.downPercent}% DOWN</strong></div>
-            <p>Social votes are unweighted and are not verified trades.</p>
+          <div className="market-handoff">
+            <span>Next</span>
+            <p>Record an independent judgment before DreamPulse reveals agent and room consensus.</p>
           </div>
         </section>
-        <ForecastComposer market={market} onReceipt={setCreatedReceipt} />
+        <ForecastComposer
+          key={market.id}
+          market={market}
+          direction={direction}
+          onDirectionChange={(next) => { setDirection(next); setAttribution(null) }}
+          signals={signals.map((signal) => ({ direction: signal.direction, confidence: signal.confidence, reason: signal.reason, agentName: signal.agent.name }))}
+          room={room}
+          baselineUpPrice={decisionBaseline?.marketId === market.id ? decisionBaseline.upPrice : market.upPrice}
+          onReceipt={setCreatedReceipt}
+        />
       </div>
 
       <div className="post-forecast-grid">
         <section className="receipt-stage" aria-live="polite">
-          {createdReceipt ? <ReceiptCard receipt={createdReceipt} /> : <div className="receipt-placeholder"><span className="source-label dreampulse">Verifiable receipt</span><h3>Your signed forecast appears here.</h3><p>Publish without trading; economic backing remains optional.</p></div>}
+          {createdReceipt ? <ReceiptCard receipt={createdReceipt} /> : <div className="receipt-placeholder"><span className="source-label dreampulse">Decision memory</span><h3>Your signed decision appears here.</h3><p>Preserve the reasoning without trading; economic backing remains optional.</p></div>}
         </section>
         <aside className="action-panel" aria-label="Optional DreamDEX economic backing">
           <p className="source-label dreamdex">Optional DreamDEX backing</p>

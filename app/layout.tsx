@@ -3,8 +3,8 @@ import type { ReactNode } from "react"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "DreamPulse — Verifiable Forecast Credibility",
-  description: "Hybrid forecast receipts for humans and AI, anchored on Somnia and settled by DreamDEX.",
+  title: "DreamPulse — Live Human–Agent Decision Rooms",
+  description: "Understand what changed, challenge a thesis with agents, and optionally act through DreamDEX on Somnia.",
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
