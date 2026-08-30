@@ -1,5 +1,5 @@
-import { isBinaryMarket, SomniaMarkets, type UnifiedBalances, type UnifiedMarket, type UnifiedOrder } from "@somnia-chain/markets-sdk"
-import { createPublicClient, createWalletClient, custom, http, type EIP1193Provider, type Hex, type WalletClient } from "viem"
+import { binaryModuleReadAbi, isBinaryMarket, SomniaMarkets, type UnifiedBalances, type UnifiedMarket, type UnifiedOrder } from "@somnia-chain/markets-sdk"
+import { createPublicClient, createWalletClient, custom, http, parseAbi, type Address, type EIP1193Provider, type Hex, type WalletClient } from "viem"
 import { DREAMDEX, somniaTestnet } from "./config"
 import { phaseFromStatus } from "./lifecycle"
 import { reconnectDelay, type FreshnessState } from "./realtime"
@@ -18,6 +18,20 @@ const createExchange = (walletClient?: WalletClient) =>
   })
 
 const sameVenue = (value?: string | null) => value?.toLowerCase() === DREAMDEX.venueId.toLowerCase()
+const binaryMarketStatusAbi = parseAbi(["function status() view returns (uint8)"])
+type OnchainMarketSnapshot = { pool: Address; expiry: bigint; status: number }
+
+export async function readWithRpcFallback<T>(primary: () => Promise<T>, fallback: () => Promise<T>) {
+  try { return await primary() } catch { return fallback() }
+}
+
+async function readHttpMarketSnapshot(marketId: Hex): Promise<OnchainMarketSnapshot> {
+  const client = createPublicClient({ chain: somniaTestnet, transport: http(DREAMDEX.rpcUrl) })
+  const record = await client.readContract({ address: DREAMDEX.addresses.binaryModule, abi: binaryModuleReadAbi, functionName: "markets", args: [marketId] })
+  const marketAddress = record[8]
+  const status = await client.readContract({ address: marketAddress, abi: binaryMarketStatusAbi, functionName: "status" })
+  return { pool: record[9], expiry: record[13], status: Number(status) }
+}
 
 export function sortMarketCandidates(markets: UnifiedMarket[]) {
   return [...markets].sort((a, b) => {
@@ -101,7 +115,10 @@ export async function currentMarket(): Promise<MarketView> {
     }
 
     const info = market.info
-    const onchain = await exchange.client.getMarketOnchain(info.marketId)
+    const onchain = await readWithRpcFallback<OnchainMarketSnapshot>(
+      () => readHttpMarketSnapshot(info.marketId),
+      () => exchange.client.getMarketOnchain(info.marketId),
+    )
     const yesSymbol = market.outcomes?.[0]?.symbol || `${market.symbol}#YES`
     const noSymbol = market.outcomes?.[1]?.symbol || `${market.symbol}#NO`
     const book = await exchange.fetchOrderBook(yesSymbol, 3).catch(() => ({ bids: [], asks: [] }))

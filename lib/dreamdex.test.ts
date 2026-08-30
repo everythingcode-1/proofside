@@ -48,6 +48,14 @@ describe("browserExchange", () => {
 })
 
 describe("DreamDEX account views", () => {
+  it("falls back to HTTP when the SDK WebSocket market read fails", async () => {
+    const { readWithRpcFallback } = await import("./dreamdex")
+    const fallback = vi.fn(async () => ({ status: 1 }))
+
+    await expect(readWithRpcFallback(async () => { throw new Error("WebSocket request failed") }, fallback)).resolves.toEqual({ status: 1 })
+    expect(fallback).toHaveBeenCalledOnce()
+  })
+
   it("selects the same market when BTC and ETH share an expiry", async () => {
     const { sortMarketCandidates } = await import("./dreamdex")
     const btc = { symbol: "BTC", info: { expiry: 200, marketId: "0x02" } }
