@@ -5,6 +5,7 @@ import { phaseFromStatus } from "./lifecycle"
 import { reconnectDelay, type FreshnessState } from "./realtime"
 import type { TransactionState } from "./transactions"
 import type { Direction, MarketView } from "./types"
+import { buildOracleChartView } from "./oracle-chart"
 
 const createExchange = (walletClient?: WalletClient) =>
   new SomniaMarkets({
@@ -117,6 +118,20 @@ export async function currentMarket(): Promise<MarketView> {
       statusCode: status,
       isLive: status === 1,
     }
+  } finally {
+    await Promise.race([exchange.close(), new Promise((resolve) => setTimeout(resolve, 1_500))]).catch(() => undefined)
+  }
+}
+
+export async function loadOracleChart(market: MarketView, now = Date.now()) {
+  const exchange = createExchange()
+  try {
+    const candles = await exchange.client.fetchPriceCandles(market.asset, "M1", {
+      from: market.opensAt,
+      to: Math.floor(now / 1000),
+      limit: 240,
+    })
+    return buildOracleChartView(market, candles, now)
   } finally {
     await Promise.race([exchange.close(), new Promise((resolve) => setTimeout(resolve, 1_500))]).catch(() => undefined)
   }
