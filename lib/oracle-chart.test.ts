@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildOracleChartView } from "./oracle-chart"
+import { buildOracleChartView, mergeOracleChartPoints } from "./oracle-chart"
 import { DREAMDEX } from "./config"
 
 const market = { id: "m1", asset: "BTC" as const, opensAt: 1000, locksAt: 1600, strike: "Opening price" }
@@ -34,5 +34,13 @@ describe("oracle chart", () => {
     const view = buildOracleChartView(market, rows, 20_000_000)
     expect(view.points).toHaveLength(240)
     expect(view.points[0].time).toBeLessThan(view.points.at(-1)!.time)
+  })
+
+  it("updates the current candle without dropping chart history", () => {
+    const point = (time: number, open: number, close: number) => ({ time, open, high: Math.max(open, close) + 1, low: Math.min(open, close) - 1, close })
+    const previous = [point(100, 10, 10), point(160, 10, 11)]
+    const incoming = [point(160, 10, 12), point(220, 12, 13)]
+
+    expect(mergeOracleChartPoints(previous, incoming)).toEqual([previous[0], incoming[0], incoming[1]])
   })
 })

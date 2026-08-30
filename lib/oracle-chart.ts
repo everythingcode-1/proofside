@@ -9,6 +9,12 @@ export type OracleChartView = {
   freshness: "LIVE" | "STALE" | "EMPTY"; points: OracleChartPoint[]
 }
 
+export function mergeOracleChartPoints(previous: OracleChartPoint[], incoming: OracleChartPoint[]) {
+  const points = new Map(previous.map((point) => [point.time, point]))
+  for (const point of incoming) points.set(point.time, point)
+  return [...points.values()].sort((a, b) => a.time - b.time).slice(-240)
+}
+
 export function buildOracleChartView(
   market: Pick<MarketView, "id" | "asset" | "opensAt" | "locksAt" | "strike">,
   candles: PriceCandle[],
