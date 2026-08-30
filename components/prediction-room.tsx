@@ -344,7 +344,7 @@ export function PredictionRoom() {
             <strong>{market.strike}</strong>
           </div>
 
-          <MarketOracleChart marketId={market.id} asset={market.asset} />
+          <MarketOracleChart market={market} />
 
           <div className="odds-grid">
             <button className={`odds-card up ${direction === "UP" ? "selected" : ""}`} onClick={() => setDirection("UP")} disabled={!market.isLive}>

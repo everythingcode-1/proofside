@@ -31,6 +31,28 @@ export function applyLiveOracleTick(chart: OracleChartView, tick: OracleLiveTick
   }
 }
 
+export function seedOracleChart(
+  market: Pick<MarketView, "id" | "asset" | "opensAt" | "locksAt" | "strike">,
+  tick: OracleLiveTick,
+): OracleChartView {
+  const strike = Number(market.strike)
+  return applyLiveOracleTick({
+    marketId: market.id,
+    asset: market.asset,
+    quote: "USDC",
+    resolution: "M1",
+    opensAt: market.opensAt,
+    locksAt: market.locksAt,
+    openingPrice: Number.isFinite(strike) && strike > 0 ? strike : null,
+    currentPrice: null,
+    change: null,
+    changePercent: null,
+    updatedAt: null,
+    freshness: "EMPTY",
+    points: [],
+  }, tick)
+}
+
 export function buildOracleChartView(
   market: Pick<MarketView, "id" | "asset" | "opensAt" | "locksAt" | "strike">,
   candles: PriceCandle[],

@@ -2,11 +2,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { watchOraclePrice } from "@/lib/dreamdex"
-import { applyLiveOracleTick, mergeOracleChartPoints, type OracleChartView, type OracleLiveTick } from "@/lib/oracle-chart"
+import { applyLiveOracleTick, mergeOracleChartPoints, seedOracleChart, type OracleChartView, type OracleLiveTick } from "@/lib/oracle-chart"
+import type { MarketView } from "@/lib/types"
 
 const price = (value: number | null) => value === null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value)
 
-export function MarketOracleChart({ marketId, asset }: { marketId: string; asset: "BTC" | "ETH" }) {
+export function MarketOracleChart({ market }: { market: Pick<MarketView, "id" | "asset" | "opensAt" | "locksAt" | "strike"> }) {
+  const { id: marketId, asset } = market
   const [chart, setChart] = useState<OracleChartView | null>(null), [error, setError] = useState<string | null>(null)
   const [stream, setStream] = useState<{ state: "CONNECTING" | "LIVE" | "OFFLINE"; block: number | null; sourceAge: number | null }>({ state: "CONNECTING", block: null, sourceAge: null })
   const refreshing = useRef(false)
@@ -30,12 +32,12 @@ export function MarketOracleChart({ marketId, asset }: { marketId: string; asset
   useEffect(() => {
     const stop = watchOraclePrice(asset, (tick) => {
       liveTick.current = tick
-      setChart((current) => current ? applyLiveOracleTick(current, tick) : current)
+      setChart((current) => current ? applyLiveOracleTick(current, tick) : seedOracleChart(market, tick))
       const sourceTime = tick.sourceUpdatedAtMs ?? tick.blockTimestamp * 1000
       setStream({ state: "LIVE", block: tick.blockNumber, sourceAge: Math.max(0, tick.receivedAt - sourceTime) })
     }, (state) => setStream((current) => ({ ...current, state })))
     return () => { void stop() }
-  }, [asset, marketId])
+  }, [asset, marketId, market.opensAt, market.locksAt, market.strike])
   if (!chart) return <section className="oracle-chart loading" aria-live="polite"><div><span>{asset} / USDC</span><strong>{error || "Reading Somnia oracle…"}</strong></div>{error && <button onClick={refresh}>Retry</button>}</section>
   const above = chart.change !== null && chart.change >= 0
   const summary = chart.currentPrice === null ? `${asset} oracle has no candle data.` : `${asset} is ${price(Math.abs(chart.change ?? 0))} ${above ? "above" : "below"} its opening reference.`
@@ -51,7 +53,7 @@ export function MarketOracleChart({ marketId, asset }: { marketId: string; asset
           {chart.openingPrice !== null && <ReferenceLine y={chart.openingPrice} stroke="rgba(255,181,71,.72)" strokeDasharray="6 6" label={{ value: `Opening ${price(chart.openingPrice)}`, position: "insideTopRight", fill: "#ffb547", fontSize: 10 }} />}
           <Line type="monotone" dataKey="close" stroke={above ? "var(--cyan)" : "var(--coral)"} strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "var(--ink)" }} isAnimationActive animationDuration={500} animationEasing="ease-out" />
         </LineChart>
-      </ResponsiveContainer> : <div className="oracle-empty">Waiting for at least two M1 oracle candles.</div>}
+      </ResponsiveContainer> : <div className="oracle-empty oracle-live-seed"><i /><span>Live tick received</span><small>Drawing the next oracle update…</small></div>}
     </div>
     <div className="oracle-chart-foot"><span>{chart.points[0] ? new Date(chart.points[0].time * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "No history"}</span><span className={stream.state === "LIVE" ? "live" : "stale"}>Oracle WebSocket · {stream.state}{stream.sourceAge !== null ? ` · source age ${stream.sourceAge}ms` : ""}</span><span>{stream.block ? `Block #${stream.block.toLocaleString()}` : chart.updatedAt ? new Date(chart.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</span></div>
   </section>
