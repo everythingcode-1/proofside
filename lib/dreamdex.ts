@@ -5,7 +5,7 @@ import { phaseFromStatus } from "./lifecycle"
 import { reconnectDelay, type FreshnessState } from "./realtime"
 import type { TransactionState } from "./transactions"
 import type { Direction, MarketView } from "./types"
-import { buildOracleChartView } from "./oracle-chart"
+import { buildOracleChartView, type OracleLiveTick } from "./oracle-chart"
 
 const createExchange = (walletClient?: WalletClient) =>
   new SomniaMarkets({
@@ -143,6 +143,40 @@ export async function loadOracleChart(market: MarketView, now = Date.now()) {
     })
     return buildOracleChartView(market, candles, now)
   } finally {
+    await Promise.race([exchange.close(), new Promise((resolve) => setTimeout(resolve, 1_500))]).catch(() => undefined)
+  }
+}
+
+export function watchOraclePrice(
+  asset: "BTC" | "ETH",
+  onTick: (tick: OracleLiveTick) => void,
+  onState: (state: "CONNECTING" | "LIVE" | "OFFLINE") => void,
+) {
+  const exchange = createExchange()
+  let stopped = false
+  let watch: { stop(): void } | undefined
+  const emit = () => {
+    const latest = exchange.client.getLivePrice(asset)
+    const info = exchange.client.getLivePriceFeedInfo(asset)
+    if (!latest || stopped) return
+    onState("LIVE")
+    onTick({
+      price: latest.price,
+      ema: latest.ema,
+      blockNumber: latest.blockNumber,
+      blockTimestamp: latest.blockTimestamp,
+      receivedAt: Date.now(),
+      sourceUpdatedAtMs: info?.sourceUpdatedAtMs,
+    })
+  }
+  const unsubscribe = exchange.client.subscribePrices(emit)
+  onState("CONNECTING")
+  void exchange.client.watchPrice(asset).then((handle) => { watch = handle; emit() }).catch(() => { if (!stopped) onState("OFFLINE") })
+
+  return async () => {
+    stopped = true
+    unsubscribe()
+    watch?.stop()
     await Promise.race([exchange.close(), new Promise((resolve) => setTimeout(resolve, 1_500))]).catch(() => undefined)
   }
 }

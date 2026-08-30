@@ -1,13 +1,16 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { mergeOracleChartPoints, type OracleChartView } from "@/lib/oracle-chart"
+import { watchOraclePrice } from "@/lib/dreamdex"
+import { applyLiveOracleTick, mergeOracleChartPoints, type OracleChartView, type OracleLiveTick } from "@/lib/oracle-chart"
 
 const price = (value: number | null) => value === null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value)
 
 export function MarketOracleChart({ marketId, asset }: { marketId: string; asset: "BTC" | "ETH" }) {
   const [chart, setChart] = useState<OracleChartView | null>(null), [error, setError] = useState<string | null>(null)
+  const [stream, setStream] = useState<{ state: "CONNECTING" | "LIVE" | "OFFLINE"; block: number | null; sourceAge: number | null }>({ state: "CONNECTING", block: null, sourceAge: null })
   const refreshing = useRef(false)
+  const liveTick = useRef<OracleLiveTick | null>(null)
   const refresh = useCallback(async () => {
     if (refreshing.current) return
     refreshing.current = true
@@ -16,14 +19,23 @@ export function MarketOracleChart({ marketId, asset }: { marketId: string; asset
       const body = await response.json(); if (!response.ok) throw new Error(body.message || "Oracle chart unavailable.")
       const next = body.chart as OracleChartView
       setChart((current) => {
-        if (!current || current.marketId !== next.marketId) return next
-        return { ...next, points: mergeOracleChartPoints(current.points, next.points) }
+        const merged = !current || current.marketId !== next.marketId ? next : { ...next, points: mergeOracleChartPoints(current.points, next.points) }
+        return liveTick.current ? applyLiveOracleTick(merged, liveTick.current) : merged
       })
       setError(null)
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Oracle chart unavailable.") }
     finally { refreshing.current = false }
   }, [marketId])
-  useEffect(() => { setChart(null); setError(null); void refresh(); const timer = window.setInterval(refresh, 3_000); return () => window.clearInterval(timer) }, [refresh])
+  useEffect(() => { setChart(null); setError(null); liveTick.current = null; void refresh(); const timer = window.setInterval(refresh, 30_000); return () => window.clearInterval(timer) }, [refresh])
+  useEffect(() => {
+    const stop = watchOraclePrice(asset, (tick) => {
+      liveTick.current = tick
+      setChart((current) => current ? applyLiveOracleTick(current, tick) : current)
+      const sourceTime = tick.sourceUpdatedAtMs ?? tick.blockTimestamp * 1000
+      setStream({ state: "LIVE", block: tick.blockNumber, sourceAge: Math.max(0, tick.receivedAt - sourceTime) })
+    }, (state) => setStream((current) => ({ ...current, state })))
+    return () => { void stop() }
+  }, [asset, marketId])
   if (!chart) return <section className="oracle-chart loading" aria-live="polite"><div><span>{asset} / USDC</span><strong>{error || "Reading Somnia oracle…"}</strong></div>{error && <button onClick={refresh}>Retry</button>}</section>
   const above = chart.change !== null && chart.change >= 0
   const summary = chart.currentPrice === null ? `${asset} oracle has no candle data.` : `${asset} is ${price(Math.abs(chart.change ?? 0))} ${above ? "above" : "below"} its opening reference.`
@@ -41,6 +53,6 @@ export function MarketOracleChart({ marketId, asset }: { marketId: string; asset
         </LineChart>
       </ResponsiveContainer> : <div className="oracle-empty">Waiting for at least two M1 oracle candles.</div>}
     </div>
-    <div className="oracle-chart-foot"><span>{chart.points[0] ? new Date(chart.points[0].time * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "No history"}</span><span className={chart.freshness.toLowerCase()}>Somnia oracle · {chart.freshness}</span><span>{chart.updatedAt ? new Date(chart.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</span></div>
+    <div className="oracle-chart-foot"><span>{chart.points[0] ? new Date(chart.points[0].time * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "No history"}</span><span className={stream.state === "LIVE" ? "live" : "stale"}>Oracle WebSocket · {stream.state}{stream.sourceAge !== null ? ` · source age ${stream.sourceAge}ms` : ""}</span><span>{stream.block ? `Block #${stream.block.toLocaleString()}` : chart.updatedAt ? new Date(chart.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</span></div>
   </section>
 }

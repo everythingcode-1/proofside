@@ -2,6 +2,7 @@ import type { PriceCandle } from "@somnia-chain/markets-sdk"
 import type { MarketView } from "./types"
 
 export type OracleChartPoint = { time: number; open: number; high: number; low: number; close: number }
+export type OracleLiveTick = { price: number; ema: number; blockNumber: number; blockTimestamp: number; receivedAt: number; sourceUpdatedAtMs?: number | null }
 export type OracleChartView = {
   marketId: string; asset: "BTC" | "ETH"; quote: "USDC"; resolution: "M1"
   opensAt: number; locksAt: number; openingPrice: number | null; currentPrice: number | null
@@ -13,6 +14,21 @@ export function mergeOracleChartPoints(previous: OracleChartPoint[], incoming: O
   const points = new Map(previous.map((point) => [point.time, point]))
   for (const point of incoming) points.set(point.time, point)
   return [...points.values()].sort((a, b) => a.time - b.time).slice(-240)
+}
+
+export function applyLiveOracleTick(chart: OracleChartView, tick: OracleLiveTick): OracleChartView {
+  if (chart.updatedAt !== null && tick.blockTimestamp * 1000 < chart.updatedAt) return chart
+  const point = { time: tick.blockTimestamp, open: tick.price, high: tick.price, low: tick.price, close: tick.price }
+  const change = chart.openingPrice === null ? null : tick.price - chart.openingPrice
+  return {
+    ...chart,
+    currentPrice: tick.price,
+    change,
+    changePercent: change === null || chart.openingPrice === null ? null : change / chart.openingPrice * 100,
+    updatedAt: tick.blockTimestamp * 1000,
+    freshness: "LIVE",
+    points: mergeOracleChartPoints(chart.points, [point]),
+  }
 }
 
 export function buildOracleChartView(

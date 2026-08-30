@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildOracleChartView, mergeOracleChartPoints } from "./oracle-chart"
+import { applyLiveOracleTick, buildOracleChartView, mergeOracleChartPoints } from "./oracle-chart"
 import { DREAMDEX } from "./config"
 
 const market = { id: "m1", asset: "BTC" as const, opensAt: 1000, locksAt: 1600, strike: "Opening price" }
@@ -42,5 +42,13 @@ describe("oracle chart", () => {
     const incoming = [point(160, 10, 12), point(220, 12, 13)]
 
     expect(mergeOracleChartPoints(previous, incoming)).toEqual([previous[0], incoming[0], incoming[1]])
+  })
+
+  it("applies a newer websocket tick to current price and change", () => {
+    const view = buildOracleChartView(market, [candle(1000, 100, 101)], 1_060_000)
+    const live = applyLiveOracleTick(view, { price: 102.25, ema: 102, blockNumber: 42, blockTimestamp: 1061, receivedAt: 1_061_120 })
+
+    expect(live).toMatchObject({ currentPrice: 102.25, change: 2.25, changePercent: 2.25, updatedAt: 1_061_000, freshness: "LIVE" })
+    expect(live.points.at(-1)).toMatchObject({ time: 1061, close: 102.25 })
   })
 })
