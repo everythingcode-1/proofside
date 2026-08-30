@@ -5,7 +5,7 @@ import type { EIP1193Provider } from "viem"
 import { DREAMDEX } from "@/lib/config"
 import { browserPortfolio, faucetBrowserCollateral, placeBrowserOrder, watchMarketBook, type PortfolioView } from "@/lib/dreamdex"
 import { countdownLabel, durationLabel, probabilityLabel } from "@/lib/format"
-import { openingSummary, resultSummary } from "@/lib/lifecycle"
+import { resultSummary } from "@/lib/lifecycle"
 import { freshnessState, type FreshnessState } from "@/lib/realtime"
 import type { TransactionState } from "@/lib/transactions"
 import type { Direction, MarketView, RoomState, TradeProof } from "@/lib/types"
@@ -13,6 +13,10 @@ import { pulseStage, speedLabel } from "@/lib/pulse-ui"
 import { PulseRail } from "@/components/pulse-rail"
 import { MarketOracleChart } from "@/components/market-oracle-chart"
 import { marketRefreshDelay } from "@/lib/live-refresh"
+import { ForecastComposer } from "@/components/forecast-composer"
+import { ReceiptCard } from "@/components/receipt-card"
+import type { StoredForecast } from "@/lib/forecast-store"
+import { dreamPulseInterpretation } from "@/lib/market-provenance"
 
 type MarketResponse = { market?: MarketView; error?: string; fetchedAt: number }
 type Activity = { kind: "FAUCET" | "ORDER"; hash: `0x${string}`; detail: string }
@@ -48,6 +52,7 @@ export function PredictionRoom() {
   const [signals, setSignals] = useState<AgentSignal[]>([])
   const [attribution, setAttribution] = useState<{ agent: string; signal: string; name?: string } | null>(null)
   const [verificationMs, setVerificationMs] = useState<number | null>(null)
+  const [createdReceipt, setCreatedReceipt] = useState<StoredForecast | null>(null)
   const actionStartedAt = useRef<number | null>(null)
   const marketRef = useRef<MarketView | null>(null)
   const refreshingMarket = useRef(false)
@@ -306,7 +311,6 @@ export function PredictionRoom() {
     }
   }
 
-  const crowdUp = `${room.upPercent}%`
   const hostText = useMemo(() => {
     if (!market) return "Scanning the DreamDEX venue for the next live room…"
     if (market.phase === "SETTLED" && market.outcome) {
@@ -314,13 +318,8 @@ export function PredictionRoom() {
       return resultSummary({ asset: market.asset, outcome: market.outcome, crowdWon })
     }
     if (market.phase === "VOID") return "DreamDEX voided this contract. No winning direction is declared."
-    return openingSummary({
-      asset: market.asset,
-      strike: market.strike,
-      up: probabilityLabel(market.upPrice),
-      crowd: crowdUp,
-    })
-  }, [market, room, crowdUp])
+    return dreamPulseInterpretation(market, room)
+  }, [market, room])
 
   if (!market) {
     return (
@@ -350,20 +349,22 @@ export function PredictionRoom() {
         <div className="rollover-note">✦ Host opened a new room after market <span>{short(previousMarketId)}</span> left the live venue.</div>
       )}
 
-      <div className="room-grid">
-        <div className="market-panel">
-          <div className="market-meta">
-            <span>{market.asset} · {durationLabel(market.durationSec)}</span>
-            <span>Closes in {countdownLabel(market.locksAt, now)}</span>
+      <div className="forecast-workspace">
+        <section className="market-panel" aria-labelledby="canonical-market-question">
+          <div className="source-heading">
+            <span className="source-label dreamdex">DreamDEX canonical rule</span>
+            <span>{market.asset} · {durationLabel(market.durationSec)} · closes in {countdownLabel(market.locksAt, now)}</span>
           </div>
-          <h2>{market.question}</h2>
+          <h2 id="canonical-market-question">{market.question}</h2>
           <div className="line-row">
-            <span>Line to beat</span>
+            <span>Opening reference</span>
             <strong>{market.strike}</strong>
           </div>
 
+          <div className="source-divider"><span className="source-label somnia">Somnia oracle data</span><small>{market.asset}/USDC live reference</small></div>
           <MarketOracleChart market={market} />
 
+          <div className="source-divider"><span className="source-label dreamdex">DreamDEX order book</span><small>Executable market probability</small></div>
           <div className="odds-grid">
             <button className={`odds-card up ${direction === "UP" ? "selected" : ""}`} onClick={() => setDirection("UP")} disabled={!market.isLive}>
               <span>▲ UP</span><strong>{probabilityLabel(market.upPrice)}</strong><small>backs YES</small>
@@ -374,20 +375,27 @@ export function PredictionRoom() {
           </div>
 
           <div className="host-note">
-            <div><small>MARKET RULE</small><p>{hostText}</p></div>
+            <div><small>DreamPulse interpretation</small><p>{hostText}</p></div>
           </div>
 
-          {signals.length > 0 && <div className="signal-list"><div className="section-heading"><span>Agent signals</span><small>auditable · not trades</small></div>{signals.map((signal) => <button key={signal.id} onClick={() => { setDirection(signal.direction); setAttribution({ agent: signal.actorId, signal: signal.id, name: signal.agent.name }) }}><span><b>{signal.agent.name}</b> <em>AGENT</em><small>{signal.reason || signal.agent.framework}</small></span><strong className={signal.direction.toLowerCase()}>{signal.direction} {signal.confidence === null ? "" : `${signal.confidence}%`}</strong></button>)}</div>}
+          {signals.length > 0 && <div className="signal-list"><div className="section-heading"><span>DreamPulse agent signals</span><small>auditable · not trades</small></div>{signals.map((signal) => <button key={signal.id} onClick={() => { setDirection(signal.direction); setAttribution({ agent: signal.actorId, signal: signal.id, name: signal.agent.name }) }}><span><b>{signal.agent.name}</b> <em>AGENT</em><small>{signal.reason || signal.agent.framework}</small></span><strong className={signal.direction.toLowerCase()}>{signal.direction} {signal.confidence === null ? "" : `${signal.confidence}%`}</strong></button>)}</div>}
 
           <div className="crowd-card">
-            <div className="section-heading"><span>Room conviction</span><small>{room.participants} participants</small></div>
+            <div className="section-heading"><span>DreamPulse social signal</span><small>{room.participants} participants</small></div>
             <div className="conviction-bar"><span style={{ width: `${room.upPercent}%` }} /></div>
             <div className="conviction-labels"><strong>▲ {room.upPercent}% UP</strong><strong>▼ {room.downPercent}% DOWN</strong></div>
             <p>Social votes are unweighted and are not verified trades.</p>
           </div>
-        </div>
+        </section>
+        <ForecastComposer market={market} onReceipt={setCreatedReceipt} />
+      </div>
 
-        <aside className="action-panel">
+      <div className="post-forecast-grid">
+        <section className="receipt-stage" aria-live="polite">
+          {createdReceipt ? <ReceiptCard receipt={createdReceipt} /> : <div className="receipt-placeholder"><span className="source-label dreampulse">Verifiable receipt</span><h3>Your signed forecast appears here.</h3><p>Publish without trading; economic backing remains optional.</p></div>}
+        </section>
+        <aside className="action-panel" aria-label="Optional DreamDEX economic backing">
+          <p className="source-label dreamdex">Optional DreamDEX backing</p>
           <div className="section-heading"><span>Your position</span><small>{wallet ? short(wallet) : "wallet not connected"}</small></div>
           {attribution && <p className="signal-attribution">Signal from {attribution.name || short(attribution.agent)}; review before signing.</p>}
           <div className="direction-review"><span>Conviction</span><strong className={direction.toLowerCase()}>{direction === "UP" ? "▲" : "▼"} {direction}</strong></div>

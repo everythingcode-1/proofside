@@ -1,16 +1,20 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import type { EIP1193Provider } from "viem"
 import type { StoredForecast } from "@/lib/forecast-store"
 import type { Direction, MarketView } from "@/lib/types"
 
-export function ForecastComposer() {
-  const [market, setMarket] = useState<MarketView | null>(null), [wallet, setWallet] = useState<`0x${string}` | null>(null)
+type ForecastComposerProps = {
+  market: MarketView
+  onReceipt?: (receipt: StoredForecast) => void
+}
+
+export function ForecastComposer({ market, onReceipt }: ForecastComposerProps) {
+  const [wallet, setWallet] = useState<`0x${string}` | null>(null)
   const [direction, setDirection] = useState<Direction>("UP"), [confidence, setConfidence] = useState(65)
   const [thesis, setThesis] = useState(""), [counterCase, setCounterCase] = useState(""), [invalidation, setInvalidation] = useState("")
   const [state, setState] = useState("IDLE"), [message, setMessage] = useState("A forecast becomes public only after you review and sign it.")
   const [receipt, setReceipt] = useState<StoredForecast | null>(null)
-  useEffect(() => { fetch("/api/market", { cache: "no-store" }).then((response) => response.json()).then((data) => setMarket(data.market ?? null)).catch(() => setMessage("DreamDEX market is unavailable.")) }, [])
   const provider = () => (window as Window & { ethereum?: EIP1193Provider }).ethereum
   const connect = async () => { const injected = provider(); if (!injected) throw new Error("No EVM wallet found."); const accounts = await injected.request({ method: "eth_requestAccounts" }) as `0x${string}`[]; if (!accounts[0]) throw new Error("No wallet selected."); setWallet(accounts[0]); return accounts[0] }
   const publish = async () => {
@@ -25,8 +29,11 @@ export function ForecastComposer() {
       setState("ANCHORING"); setMessage("Signature verified. Anchoring the receipt hash to Somnia…")
       const response = await fetch("/api/forecasts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...fields, createdAt: challenge.payload.createdAt, signature }) })
       const result = await response.json(); if (!response.ok) throw new Error(result.message)
-      setReceipt(result.receipt); setState(result.receipt.proofState); setMessage(result.receipt.proofState === "ANCHORED" ? "Receipt anchored on Somnia." : "Receipt signed. On-chain anchoring is not configured yet.")
+      setReceipt(result.receipt); onReceipt?.(result.receipt); setState(result.receipt.proofState); setMessage(result.receipt.proofState === "ANCHORED" ? "Receipt anchored on Somnia." : "Receipt signed. On-chain anchoring is not configured yet.")
     } catch (error) { setState("ERROR"); setMessage(error instanceof Error ? error.message : "Publication failed.") }
   }
-  return <section className="composer-shell" id="create"><div className="composer-intro"><p className="eyebrow">Create a forecast receipt</p><h2>State what you believe.<br />Make it accountable.</h2><p>Confidence is scored after DreamDEX resolves the market. Thesis and counter-case are locked into the receipt hash.</p></div><div className="composer-form"><div className="composer-market"><span>DreamDEX market</span><strong>{market?.question ?? "Loading live market…"}</strong></div><div className="composer-direction"><button className={direction === "UP" ? "selected up" : "up"} onClick={() => setDirection("UP")}>▲ UP</button><button className={direction === "DOWN" ? "selected down" : "down"} onClick={() => setDirection("DOWN")}>▼ DOWN</button></div><label>Confidence <strong>{confidence}%</strong><input type="range" min="1" max="99" value={confidence} onChange={(event) => setConfidence(Number(event.target.value))} /></label><label>Thesis<textarea maxLength={560} value={thesis} onChange={(event) => setThesis(event.target.value)} placeholder="Why should this outcome happen?" /></label><label>Counter-case<textarea maxLength={280} value={counterCase} onChange={(event) => setCounterCase(event.target.value)} placeholder="What is the strongest opposing case?" /></label><label>Invalidation condition<textarea maxLength={280} value={invalidation} onChange={(event) => setInvalidation(event.target.value)} placeholder="What evidence would make this thesis wrong?" /></label><button className="trade-button" onClick={publish} disabled={!market?.isLive || ["SIGNING","ANCHORING"].includes(state)}>Review & sign forecast</button><p className={`composer-message ${state.toLowerCase()}`}>{message}</p>{receipt && <a className="receipt-link" href={`/forecasts/${receipt.id}`}>Open verifiable receipt →</a>}</div></section>
+  return <section className="forecast-card" id="create" aria-labelledby="forecast-heading">
+    <div className="forecast-card-head"><p className="source-label dreampulse">DreamPulse forecast receipt</p><h2 id="forecast-heading">Make your judgment accountable.</h2><p>Confidence is scored after DreamDEX settlement. Trading remains optional.</p></div>
+    <div className="composer-form"><div className="composer-market"><span>DreamDEX canonical market</span><strong>{market.question}</strong></div><div className="composer-direction"><button className={direction === "UP" ? "selected up" : "up"} onClick={() => setDirection("UP")}>▲ UP</button><button className={direction === "DOWN" ? "selected down" : "down"} onClick={() => setDirection("DOWN")}>▼ DOWN</button></div><label>Confidence <strong>{confidence}%</strong><input type="range" min="1" max="99" value={confidence} onChange={(event) => setConfidence(Number(event.target.value))} /></label><label>Thesis<textarea maxLength={560} value={thesis} onChange={(event) => setThesis(event.target.value)} placeholder="Why should this outcome happen?" /></label><label>Counter-case<textarea maxLength={280} value={counterCase} onChange={(event) => setCounterCase(event.target.value)} placeholder="What is the strongest opposing case?" /></label><label>Invalidation condition<textarea maxLength={280} value={invalidation} onChange={(event) => setInvalidation(event.target.value)} placeholder="What evidence would make this thesis wrong?" /></label><button className="trade-button" onClick={publish} disabled={!market.isLive || ["SIGNING","ANCHORING"].includes(state)}>Review & sign forecast</button><p className={`composer-message ${state.toLowerCase()}`} aria-live="polite">{message}</p>{receipt && <a className="receipt-link" href={`/forecasts/${receipt.id}`}>Open verifiable receipt →</a>}</div>
+  </section>
 }
