@@ -5,10 +5,10 @@
   --cyan:var(--green); --coral:var(--red); --paper:var(--text); --ink:var(--bg); --panel:var(--surface); --raised:var(--surface-3); --line:var(--border);
   --radius-sm:12px; --radius-md:18px; --radius-lg:26px; --shadow:0 28px 80px rgba(0,0,0,.44); --fast:160ms; --normal:280ms; --ease:cubic-bezier(.22,1,.36,1); color-scheme:dark;
 }
-*{box-sizing:border-box} html{scroll-behavior:smooth;background:var(--bg)} body{min-height:100vh;margin:0;color:var(--text);background:radial-gradient(ellipse 60% 36% at 82% 0%,rgba(31,69,105,.32),transparent 68%),radial-gradient(ellipse 42% 26% at 8% 45%,rgba(35,225,140,.055),transparent 72%),var(--bg);font-family:"Aptos","Avenir Next","Segoe UI Variable",sans-serif}
+*{box-sizing:border-box} html{scroll-behavior:smooth;background:var(--bg)} body{min-height:100vh;margin:0;color:var(--text);background:radial-gradient(ellipse 78% 52% at 91% -8%,rgba(31,69,105,.27),transparent 66%),radial-gradient(ellipse 60% 46% at 18% 54%,rgba(35,225,140,.045),transparent 72%),linear-gradient(112deg,#060607 0%,#07090b 56%,#071018 100%);background-attachment:fixed;font-family:"Aptos","Avenir Next","Segoe UI Variable",sans-serif}
 button,input,textarea{font:inherit} button{cursor:pointer} button:disabled{cursor:not-allowed;opacity:.45} a{color:inherit}
 button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--blue-soft);outline-offset:3px}
-main{position:relative;width:min(1440px,100%);min-height:100vh;margin:auto;padding:0 clamp(20px,4vw,64px);overflow:hidden;background:radial-gradient(circle at 86% 11%,rgba(31,69,105,.14),transparent 27%)} main::before{content:"";position:absolute;z-index:0;width:520px;height:520px;right:-220px;top:260px;border-radius:50%;background:rgba(35,225,140,.035);filter:blur(90px);pointer-events:none} main>*{position:relative;z-index:1}
+main{position:relative;width:min(1440px,100%);min-height:100vh;margin:auto;padding:0 clamp(20px,4vw,64px);overflow:hidden;background:transparent} main>*{position:relative;z-index:1}
 
 /* Navigation */
 .site-header{position:sticky;top:14px;z-index:20;min-height:66px;display:flex;align-items:center;gap:28px;margin-top:14px;padding:9px 10px 9px 14px;border:1px solid var(--border);border-radius:20px;background:rgba(6,6,7,.76);box-shadow:0 16px 50px rgba(0,0,0,.28);backdrop-filter:blur(22px) saturate(130%)}
