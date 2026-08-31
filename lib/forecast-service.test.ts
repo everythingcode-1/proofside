@@ -6,7 +6,8 @@ const market = { id: "market-1", locksAt: 2000, isLive: true, phase: "LIVE" as c
 const request = {
   creatorType: "HUMAN" as const, creatorId: "0xabc0000000000000000000000000000000000123",
   creatorWallet: "0xabc0000000000000000000000000000000000123" as `0x${string}`,
-  marketId: "market-1", direction: "UP" as const, confidenceBps: 7200,
+  marketId: "market-1", initialDirection: "DOWN" as const, initialConfidenceBps: 5400, initialJudgmentAt: 900,
+  direction: "UP" as const, confidenceBps: 7200,
   thesis: "Demand remains above the opening print.", counterCase: "Risk-off pressure can reverse it.",
   invalidationCondition: "Price breaks below the open.", authorizationType: "EIP712" as const, authorizationValue: "0xsig",
 }

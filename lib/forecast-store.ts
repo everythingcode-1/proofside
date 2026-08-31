@@ -3,8 +3,9 @@ import type { CreatorType, ForecastProofState } from "./forecast-receipt"
 import type { Direction } from "./types"
 
 export type StoredForecast = {
-  id: string; schemaVersion: 1; creatorType: CreatorType; creatorId: string; creatorWallet: `0x${string}`
-  marketId: string; marketIdHash: `0x${string}`; direction: Direction; confidenceBps: number
+  id: string; schemaVersion: 1 | 2; creatorType: CreatorType; creatorId: string; creatorWallet: `0x${string}`
+  marketId: string; marketIdHash: `0x${string}`; initialDirection: Direction; initialConfidenceBps: number; initialJudgmentAt: number
+  direction: Direction; confidenceBps: number
   thesis: string; counterCase: string; invalidationCondition: string; createdAt: number; locksAt: number
   revision: number; previousReceiptHash: `0x${string}` | null; canonicalHash: `0x${string}`
   authorizationType: "EIP712" | "AGENT_API"; authorizationValue: string; proofState: ForecastProofState
@@ -13,9 +14,12 @@ export type StoredForecast = {
 }
 
 const mapRow = (row: Record<string, unknown>): StoredForecast => ({
-  id: String(row.id), schemaVersion: Number(row.schema_version) as 1, creatorType: row.creator_type as CreatorType,
+  id: String(row.id), schemaVersion: Number(row.schema_version) as 1 | 2, creatorType: row.creator_type as CreatorType,
   creatorId: String(row.creator_id), creatorWallet: String(row.creator_wallet) as `0x${string}`,
   marketId: String(row.market_id), marketIdHash: String(row.market_id_hash) as `0x${string}`,
+  initialDirection: (row.initial_direction ?? row.direction) as Direction,
+  initialConfidenceBps: Number(row.initial_confidence_bps ?? row.confidence_bps),
+  initialJudgmentAt: Number(row.initial_judgment_at ?? row.created_at),
   direction: row.direction as Direction, confidenceBps: Number(row.confidence_bps), thesis: String(row.thesis),
   counterCase: String(row.counter_case), invalidationCondition: String(row.invalidation_condition),
   createdAt: Number(row.created_at), locksAt: Number(row.locks_at), revision: Number(row.revision),
@@ -37,9 +41,9 @@ export function createForecastStore(filename?: string) {
   return {
     createReceipt(row: StoredForecast) {
       db.prepare(`INSERT INTO forecast_receipts
-        (id,schema_version,creator_type,creator_id,creator_wallet,market_id,market_id_hash,direction,confidence_bps,thesis,counter_case,invalidation_condition,created_at,locks_at,revision,previous_receipt_hash,canonical_hash,authorization_type,authorization_value,proof_state,backing_tx_hash)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-        row.id,row.schemaVersion,row.creatorType,row.creatorId.toLowerCase(),row.creatorWallet.toLowerCase(),row.marketId.toLowerCase(),row.marketIdHash,row.direction,row.confidenceBps,row.thesis,row.counterCase,row.invalidationCondition,row.createdAt,row.locksAt,row.revision,row.previousReceiptHash,row.canonicalHash,row.authorizationType,row.authorizationValue,row.proofState,row.backingTxHash ?? null)
+        (id,schema_version,creator_type,creator_id,creator_wallet,market_id,market_id_hash,initial_direction,initial_confidence_bps,initial_judgment_at,direction,confidence_bps,thesis,counter_case,invalidation_condition,created_at,locks_at,revision,previous_receipt_hash,canonical_hash,authorization_type,authorization_value,proof_state,backing_tx_hash)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        row.id,row.schemaVersion,row.creatorType,row.creatorId.toLowerCase(),row.creatorWallet.toLowerCase(),row.marketId.toLowerCase(),row.marketIdHash,row.initialDirection,row.initialConfidenceBps,row.initialJudgmentAt,row.direction,row.confidenceBps,row.thesis,row.counterCase,row.invalidationCondition,row.createdAt,row.locksAt,row.revision,row.previousReceiptHash,row.canonicalHash,row.authorizationType,row.authorizationValue,row.proofState,row.backingTxHash ?? null)
       return this.getById(row.id)!
     },
     getById(id: string) { const row = db.prepare(`${select} WHERE f.id=?`).get(id) as Record<string, unknown> | undefined; return row ? mapRow(row) : null },

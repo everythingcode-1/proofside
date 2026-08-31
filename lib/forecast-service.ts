@@ -8,6 +8,7 @@ import type { Direction } from "./types"
 
 export type PublishForecastRequest = {
   creatorType: CreatorType; creatorId: string; creatorWallet: `0x${string}`; marketId: string
+  initialDirection?: Direction; initialConfidenceBps?: number; initialJudgmentAt?: number
   direction: Direction; confidenceBps: number; thesis: string; counterCase: string; invalidationCondition: string
   authorizationType: "EIP712" | "AGENT_API"; authorizationValue: string; backingTransactionHash?: `0x${string}`; createdAt?: number
 }
@@ -43,7 +44,13 @@ export function createForecastService(dependencies: Dependencies = {}) {
       const history = store.listForMarket(market.id).filter((row) => row.creatorType === request.creatorType && row.creatorId === request.creatorId.toLowerCase())
       const previous = history[0] ?? null
       if (previous && previous.direction === request.direction && previous.confidenceBps === request.confidenceBps && previous.thesis === request.thesis.trim() && previous.counterCase === request.counterCase.trim() && previous.invalidationCondition === request.invalidationCondition.trim()) return previous
-      const input = { ...request, createdAt, locksAt, revision: previous ? previous.revision + 1 : 1, previousReceiptHash: previous?.canonicalHash ?? null }
+      const input = {
+        ...request,
+        initialDirection: request.initialDirection ?? request.direction,
+        initialConfidenceBps: request.initialConfidenceBps ?? request.confidenceBps,
+        initialJudgmentAt: request.initialJudgmentAt ?? createdAt,
+        createdAt, locksAt, revision: previous ? previous.revision + 1 : 1, previousReceiptHash: previous?.canonicalHash ?? null,
+      }
       const errors = validateForecastInput(input)
       if (errors.length) throw new Error(`VALIDATION_FAILED:${errors.join(",")}`)
       const payload = buildForecastPayload(input)

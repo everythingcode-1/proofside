@@ -5,6 +5,7 @@ const receipt = {
   id: "receipt-1", schemaVersion: 1 as const, creatorType: "HUMAN" as const, creatorId: "0xabc",
   creatorWallet: "0xabc0000000000000000000000000000000000123" as `0x${string}`,
   marketId: "market-1", marketIdHash: `0x${"1".repeat(64)}` as `0x${string}`,
+  initialDirection: "DOWN" as const, initialConfidenceBps: 5400, initialJudgmentAt: 900,
   direction: "UP" as const, confidenceBps: 7200, thesis: "Demand is holding above open.",
   counterCase: "Risk assets can reverse.", invalidationCondition: "Break below open.",
   createdAt: 1000, locksAt: 2000, revision: 1, previousReceiptHash: null,
@@ -16,7 +17,7 @@ describe("forecast store", () => {
   it("persists and finds a receipt by hash", () => {
     const store = createForecastStore(":memory:")
     store.createReceipt(receipt)
-    expect(store.getByHash(receipt.canonicalHash)?.thesis).toBe(receipt.thesis)
+    expect(store.getByHash(receipt.canonicalHash)).toMatchObject({ thesis: receipt.thesis, initialDirection: "DOWN", initialConfidenceBps: 5400 })
     store.close()
   })
 

@@ -6,6 +6,9 @@ const input = {
   creatorId: "0xAbC0000000000000000000000000000000000123",
   creatorWallet: "0xAbC0000000000000000000000000000000000123" as `0x${string}`,
   marketId: "ETH-0-29AUG26-0400-C771/tUSDC#YES",
+  initialDirection: "DOWN" as const,
+  initialConfidenceBps: 5400,
+  initialJudgmentAt: 1_776_999_990_000,
   direction: "UP" as const,
   confidenceBps: 7200,
   thesis: "ETH demand remains stronger than the opening print.",
@@ -26,6 +29,12 @@ describe("forecast receipt", () => {
 
   it("changes hash when confidence changes", () => {
     expect(hashForecastPayload(buildForecastPayload(input))).not.toBe(hashForecastPayload(buildForecastPayload({ ...input, confidenceBps: 7100 })))
+  })
+
+  it("commits the initial belief separately from the final decision", () => {
+    const revised = hashForecastPayload(buildForecastPayload(input))
+    const unchanged = hashForecastPayload(buildForecastPayload({ ...input, initialDirection: "UP" }))
+    expect(revised).not.toBe(unchanged)
   })
 
   it("rejects certainty and missing argument quality", () => {

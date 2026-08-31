@@ -130,5 +130,9 @@ export function openDatabase(filename = process.env.DREAMPULSE_DB || path.join(p
       scored_at INTEGER NOT NULL
     );
   `)
+  const receiptColumns = new Set((db.prepare("PRAGMA table_info(forecast_receipts)").all() as unknown as Array<{ name: string }>).map((column) => column.name))
+  if (!receiptColumns.has("initial_direction")) db.exec("ALTER TABLE forecast_receipts ADD COLUMN initial_direction TEXT CHECK (initial_direction IN ('UP', 'DOWN'))")
+  if (!receiptColumns.has("initial_confidence_bps")) db.exec("ALTER TABLE forecast_receipts ADD COLUMN initial_confidence_bps INTEGER CHECK (initial_confidence_bps BETWEEN 100 AND 9900)")
+  if (!receiptColumns.has("initial_judgment_at")) db.exec("ALTER TABLE forecast_receipts ADD COLUMN initial_judgment_at INTEGER")
   return db
 }

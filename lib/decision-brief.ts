@@ -37,8 +37,9 @@ export function buildDecisionBrief(input: {
   if (changes.length === 0) changes.push("No material DreamDEX odds move has been verified yet.")
 
   const selectedPrice = judgment === "UP" ? market.upPrice : market.downPrice
-  const support = signals.filter((signal) => signal.direction === judgment && signal.reason.trim()).map((signal) => `${signal.agentName}: ${signal.reason.trim()}`)
-  const counter = signals.filter((signal) => signal.direction !== judgment && signal.reason.trim()).map((signal) => `${signal.agentName}: ${signal.reason.trim()}`)
+  const agentClaim = (signal: DecisionSignal) => `${signal.agentName}${signal.confidence === null ? "" : ` · ${signal.confidence}%`}: ${signal.reason.trim()}`
+  const support = signals.filter((signal) => signal.direction === judgment && signal.reason.trim()).map(agentClaim)
+  const counter = signals.filter((signal) => signal.direction !== judgment && signal.reason.trim()).map(agentClaim)
   const aligned = signals.filter((signal) => signal.direction === judgment).length
   const opposed = signals.length - aligned
 

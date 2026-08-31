@@ -8,6 +8,9 @@ export type ForecastInput = {
   creatorId: string
   creatorWallet: `0x${string}`
   marketId: string
+  initialDirection: Direction
+  initialConfidenceBps: number
+  initialJudgmentAt: number
   direction: Direction
   confidenceBps: number
   thesis: string
@@ -18,23 +21,25 @@ export type ForecastInput = {
   revision: number
   previousReceiptHash: `0x${string}` | null
 }
-export type ForecastPayload = ForecastInput & { schemaVersion: 1; marketIdHash: `0x${string}` }
+export type ForecastPayload = ForecastInput & { schemaVersion: 2; marketIdHash: `0x${string}` }
 
 export function validateForecastInput(input: ForecastInput) {
   const errors: string[] = []
+  if (!Number.isInteger(input.initialConfidenceBps) || input.initialConfidenceBps < 100 || input.initialConfidenceBps > 9900) errors.push("Initial confidence")
   if (!Number.isInteger(input.confidenceBps) || input.confidenceBps < 100 || input.confidenceBps > 9900) errors.push("Confidence")
   if (!input.thesis.trim() || input.thesis.length > 560) errors.push("Thesis")
   if (!input.counterCase.trim() || input.counterCase.length > 280) errors.push("Counter-case")
   if (!input.invalidationCondition.trim() || input.invalidationCondition.length > 280) errors.push("Invalidation condition")
   if (!Number.isInteger(input.revision) || input.revision < 1 || (input.revision === 1) !== (input.previousReceiptHash === null)) errors.push("Revision")
   if (input.createdAt >= input.locksAt) errors.push("Market lock")
+  if (!Number.isInteger(input.initialJudgmentAt) || input.initialJudgmentAt > input.createdAt) errors.push("Initial judgment")
   return errors
 }
 
 export function buildForecastPayload(input: ForecastInput): ForecastPayload {
   return {
     ...input,
-    schemaVersion: 1,
+    schemaVersion: 2,
     creatorId: input.creatorId.toLowerCase(),
     creatorWallet: input.creatorWallet.toLowerCase() as `0x${string}`,
     marketId: input.marketId.toLowerCase(),
@@ -48,7 +53,8 @@ export function buildForecastPayload(input: ForecastInput): ForecastPayload {
 export function canonicalForecastJson(payload: ForecastPayload) {
   return JSON.stringify([
     payload.schemaVersion, payload.creatorType, payload.creatorId, payload.creatorWallet,
-    payload.marketId, payload.marketIdHash, payload.direction, payload.confidenceBps,
+    payload.marketId, payload.marketIdHash, payload.initialDirection, payload.initialConfidenceBps, payload.initialJudgmentAt,
+    payload.direction, payload.confidenceBps,
     payload.thesis, payload.counterCase, payload.invalidationCondition, payload.createdAt,
     payload.locksAt, payload.revision, payload.previousReceiptHash,
   ])

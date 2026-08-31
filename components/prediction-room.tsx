@@ -50,6 +50,7 @@ export function PredictionRoom() {
   const [attribution, setAttribution] = useState<{ agent: string; signal: string; name?: string } | null>(null)
   const [verificationMs, setVerificationMs] = useState<number | null>(null)
   const [createdReceipt, setCreatedReceipt] = useState<StoredForecast | null>(null)
+  const [analysisRevealed, setAnalysisRevealed] = useState(false)
   const [decisionBaseline, setDecisionBaseline] = useState<{ marketId: string; upPrice: number | null } | null>(null)
   const actionStartedAt = useRef<number | null>(null)
   const marketRef = useRef<MarketView | null>(null)
@@ -71,18 +72,24 @@ export function PredictionRoom() {
         return
       }
       setError(null)
+      const previousMarket = marketRef.current
+      if (previousMarket && previousMarket.id !== payload.market.id) {
+        setPreviousMarketId(previousMarket.id)
+        setRoom(emptyRoom(payload.market.id))
+        setSignals([])
+        setAttribution(null)
+        setAnalysisRevealed(false)
+        setCreatedReceipt(null)
+      }
       marketRef.current = payload.market
-      setMarket((current) => {
-        if (current && current.id !== payload.market!.id) setPreviousMarketId(current.id)
-        return payload.market!
-      })
+      setMarket(payload.market)
       setLastVerifiedAt(payload.fetchedAt)
       const [roomResponse, signalResponse] = await Promise.all([
         fetch(`/api/rooms/${payload.market.id}`, { cache: "no-store" }),
         fetch(`/api/markets/${payload.market.id}/signals`, { cache: "no-store" }),
       ])
-      if (roomResponse.ok) setRoom((await roomResponse.json()) as RoomState)
-      if (signalResponse.ok) setSignals(((await signalResponse.json()) as { signals: AgentSignal[] }).signals)
+      if (marketRef.current?.id === payload.market.id && roomResponse.ok) setRoom((await roomResponse.json()) as RoomState)
+      if (marketRef.current?.id === payload.market.id && signalResponse.ok) setSignals(((await signalResponse.json()) as { signals: AgentSignal[] }).signals)
     } catch {
       setStreamState("RECONNECTING")
       setError("DreamPulse is reconnecting to its server and DreamDEX.")
@@ -128,9 +135,7 @@ export function PredictionRoom() {
     if (query.get("market")?.toLowerCase() !== market.id.toLowerCase()) return
     const selected = signals.find((signal) => signal.id === query.get("signal") && signal.actorId === query.get("agent"))
     const linkedDirection = query.get("direction")
-    if (selected && (linkedDirection === "UP" || linkedDirection === "DOWN")) {
-      setDirection(linkedDirection); setAttribution({ agent: selected.actorId, signal: selected.id, name: selected.agent.name })
-    }
+    if (selected && (linkedDirection === "UP" || linkedDirection === "DOWN")) setAttribution({ agent: selected.actorId, signal: selected.id, name: selected.agent.name })
   }, [market?.id, signals])
 
   const freshness = freshnessState({
@@ -353,15 +358,15 @@ export function PredictionRoom() {
           <div className="source-divider"><span className="source-label somnia">Somnia oracle data</span><small>{market.asset}/USDC live reference</small></div>
           <MarketOracleChart market={market} />
 
-          <div className="source-divider"><span className="source-label dreamdex">DreamDEX order book</span><small>Executable market probability</small></div>
-          <div className="odds-grid">
+          <div className="source-divider"><span className="source-label dreamdex">DreamDEX order book</span><small>{analysisRevealed ? "Executable market probability" : "Hidden until first judgment"}</small></div>
+          {analysisRevealed ? <div className="odds-grid">
             <button className={`odds-card up ${direction === "UP" ? "selected" : ""}`} onClick={() => setDirection("UP")} disabled={!market.isLive}>
               <span>▲ UP</span><strong>{probabilityLabel(market.upPrice)}</strong><small>backs YES</small>
             </button>
             <button className={`odds-card down ${direction === "DOWN" ? "selected" : ""}`} onClick={() => setDirection("DOWN")} disabled={!market.isLive}>
               <span>▼ DOWN</span><strong>{probabilityLabel(market.downPrice)}</strong><small>backs NO</small>
             </button>
-          </div>
+          </div> : <div className="consensus-lock"><span>PRIVATE FIRST</span><strong>Market odds are intentionally concealed.</strong><p>Commit your independent direction and confidence in the Human Decision Lane to reveal them.</p></div>}
 
           <div className="market-handoff">
             <span>Next</span>
@@ -376,6 +381,7 @@ export function PredictionRoom() {
           signals={signals.map((signal) => ({ direction: signal.direction, confidence: signal.confidence, reason: signal.reason, agentName: signal.agent.name }))}
           room={room}
           baselineUpPrice={decisionBaseline?.marketId === market.id ? decisionBaseline.upPrice : market.upPrice}
+          onRevealChange={(revealed, baselineUpPrice) => { setAnalysisRevealed(revealed); setDecisionBaseline({ marketId: market.id, upPrice: baselineUpPrice }) }}
           onReceipt={setCreatedReceipt}
         />
       </div>
@@ -386,6 +392,7 @@ export function PredictionRoom() {
         </section>
         <aside className="action-panel" aria-label="Optional DreamDEX economic backing">
           <p className="source-label dreamdex">Optional DreamDEX backing</p>
+          {!analysisRevealed ? <div className="execution-lock"><span>LOCKED</span><h3>Execution follows judgment.</h3><p>Reveal the decision analysis before viewing executable odds or preparing a DreamDEX order.</p></div> : <>
           <div className="section-heading"><span>Your position</span><small>{wallet ? short(wallet) : "wallet not connected"}</small></div>
           {attribution && <p className="signal-attribution">Signal from {attribution.name || short(attribution.agent)}; review before signing.</p>}
           <div className="direction-review"><span>Conviction</span><strong className={direction.toLowerCase()}>{direction === "UP" ? "▲" : "▼"} {direction}</strong></div>
@@ -426,6 +433,7 @@ export function PredictionRoom() {
               </div>)}
             </dl>}
           </div>}
+          </>}
         </aside>
       </div>
     </section>

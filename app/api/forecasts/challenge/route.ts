@@ -12,7 +12,14 @@ export async function POST(request: Request) {
   if (body.marketId?.toLowerCase() !== market.id.toLowerCase() || !market.isLive || createdAt >= locksAt) return Response.json({ code: "MARKET_LOCKED", message: "The market is not open." }, { status: 409 })
   const history = getForecastStore().listForMarket(market.id).filter((row) => row.creatorType === "HUMAN" && row.creatorId === body.creatorWallet.toLowerCase())
   const previous = history[0]
-  const input = { ...body, creatorType: "HUMAN" as const, creatorId: body.creatorWallet, createdAt, locksAt, revision: previous ? previous.revision + 1 : 1, previousReceiptHash: previous?.canonicalHash ?? null }
+  const input = {
+    ...body,
+    initialDirection: body.initialDirection ?? body.direction,
+    initialConfidenceBps: body.initialConfidenceBps ?? body.confidenceBps,
+    initialJudgmentAt: body.initialJudgmentAt ?? createdAt,
+    creatorType: "HUMAN" as const, creatorId: body.creatorWallet, createdAt, locksAt,
+    revision: previous ? previous.revision + 1 : 1, previousReceiptHash: previous?.canonicalHash ?? null,
+  }
   const errors = validateForecastInput(input)
   if (errors.length) return Response.json({ code: "VALIDATION_FAILED", message: errors.join(", ") }, { status: 400 })
   const payload = buildForecastPayload(input)

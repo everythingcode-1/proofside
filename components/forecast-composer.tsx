@@ -13,14 +13,16 @@ type ForecastComposerProps = {
   signals: DecisionSignal[]
   room: RoomState
   baselineUpPrice: number | null
+  onRevealChange: (revealed: boolean, baselineUpPrice: number | null) => void
   onReceipt?: (receipt: StoredForecast) => void
 }
 
-export function ForecastComposer({ market, direction, onDirectionChange, signals, room, baselineUpPrice, onReceipt }: ForecastComposerProps) {
+export function ForecastComposer({ market, direction, onDirectionChange, signals, room, baselineUpPrice, onRevealChange, onReceipt }: ForecastComposerProps) {
   const [wallet, setWallet] = useState<`0x${string}` | null>(null)
   const [confidence, setConfidence] = useState(65)
   const [firstJudgment, setFirstJudgment] = useState<Direction>(direction)
   const [firstConfidence, setFirstConfidence] = useState<number | null>(null)
+  const [initialJudgmentAt, setInitialJudgmentAt] = useState<number | null>(null)
   const [revealed, setRevealed] = useState(false)
   const [thesis, setThesis] = useState("")
   const [counterCase, setCounterCase] = useState("")
@@ -34,8 +36,11 @@ export function ForecastComposer({ market, direction, onDirectionChange, signals
   const connect = async () => { const injected = provider(); if (!injected) throw new Error("No EVM wallet found."); const accounts = await injected.request({ method: "eth_requestAccounts" }) as `0x${string}`[]; if (!accounts[0]) throw new Error("No wallet selected."); setWallet(accounts[0]); return accounts[0] }
 
   const reveal = () => {
+    const judgedAt = Date.now()
     setFirstConfidence(confidence)
+    setInitialJudgmentAt(judgedAt)
     onDirectionChange(firstJudgment)
+    onRevealChange(true, market.upPrice)
     setRevealed(true)
     setMessage("Analysis revealed. Keep your judgment or revise it before signing.")
   }
@@ -44,7 +49,7 @@ export function ForecastComposer({ market, direction, onDirectionChange, signals
     try {
       const account = wallet ?? await connect()
       setState("REVIEWING"); setMessage("Preparing the exact decision receipt…")
-      const fields = { creatorWallet: account, marketId: market.id, direction, confidenceBps: confidence * 100, thesis, counterCase, invalidationCondition: invalidation }
+      const fields = { creatorWallet: account, marketId: market.id, initialDirection: firstJudgment, initialConfidenceBps: (firstConfidence ?? confidence) * 100, initialJudgmentAt: initialJudgmentAt ?? Date.now(), direction, confidenceBps: confidence * 100, thesis, counterCase, invalidationCondition: invalidation }
       const challengeResponse = await fetch("/api/forecasts/challenge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields) })
       const challenge = await challengeResponse.json(); if (!challengeResponse.ok) throw new Error(challenge.message)
       setState("SIGNING"); setMessage("Review and sign the Decision Receipt in your wallet.")
@@ -83,8 +88,8 @@ export function ForecastComposer({ market, direction, onDirectionChange, signals
       </div>
 
       <div className="argument-grid">
-        <section><small>Support case</small>{brief.support.length ? brief.support.map((item) => <p key={item}>{item}</p>) : <p>No verified agent supports this side yet.</p>}</section>
-        <section><small>Counter-case</small>{brief.marketChallenge && <p>{brief.marketChallenge}</p>}{brief.counter.length ? brief.counter.map((item) => <p key={item}>{item}</p>) : !brief.marketChallenge && <p>No verified opposing agent signal yet. Do not treat silence as confirmation.</p>}</section>
+        <section><small>Supporting claims</small>{brief.support.length ? brief.support.map((item) => <p key={item}>{item}</p>) : <p>No authenticated agent supports this side yet.</p>}</section>
+        <section><small>Challenges</small>{brief.marketChallenge && <p>{brief.marketChallenge}</p>}{brief.counter.length ? brief.counter.map((item) => <p key={item}>{item}</p>) : !brief.marketChallenge && <p>No authenticated opposing agent claim yet. Do not treat silence as confirmation.</p>}</section>
       </div>
 
       <div className="decision-revision">
@@ -98,7 +103,7 @@ export function ForecastComposer({ market, direction, onDirectionChange, signals
       <label>Strongest counter-case<textarea maxLength={280} value={counterCase} onChange={(event) => setCounterCase(event.target.value)} placeholder="What is the best reason the other side could win?" /></label>
       <label>Invalidation trigger<textarea maxLength={280} value={invalidation} onChange={(event) => setInvalidation(event.target.value)} placeholder="What observable change would make you reconsider?" /></label>
       <button className="trade-button" onClick={publish} disabled={!market.isLive || ["SIGNING","ANCHORING"].includes(state)}>Sign decision receipt</button>
-      <button className="reset-judgment" onClick={() => { setRevealed(false); setFirstJudgment(direction); setFirstConfidence(null); setMessage("Your first judgment stays on this device until you reveal the analysis.") }}>Start a fresh judgment</button>
+      <button className="reset-judgment" onClick={() => { setRevealed(false); setFirstJudgment(direction); setFirstConfidence(null); setInitialJudgmentAt(null); onRevealChange(false, market.upPrice); setMessage("Your first judgment stays on this device until you reveal the analysis.") }}>Start a fresh judgment</button>
       <p className={`composer-message ${state.toLowerCase()}`} aria-live="polite">{message}</p>
       {receipt && <a className="receipt-link" href={`/forecasts/${receipt.id}`}>Open verifiable receipt →</a>}
     </div>}
