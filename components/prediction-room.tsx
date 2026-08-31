@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { EIP1193Provider } from "viem"
 import { DREAMDEX } from "@/lib/config"
-import { browserPortfolio, faucetBrowserCollateral, placeBrowserOrder, watchMarketBook, type PortfolioView } from "@/lib/dreamdex"
+import { browserPortfolio, placeBrowserOrder, watchMarketBook, type PortfolioView } from "@/lib/dreamdex"
 import { countdownLabel, durationLabel, probabilityLabel } from "@/lib/format"
 import { freshnessState, type FreshnessState } from "@/lib/realtime"
 import type { TransactionState } from "@/lib/transactions"
@@ -13,6 +13,7 @@ import { MarketOracleChart } from "@/components/market-oracle-chart"
 import { marketRefreshDelay } from "@/lib/live-refresh"
 import { ForecastComposer } from "@/components/forecast-composer"
 import { ReceiptCard } from "@/components/receipt-card"
+import { useWalletSession } from "@/components/wallet-provider"
 import type { StoredForecast } from "@/lib/forecast-store"
 
 type MarketResponse = { market?: MarketView; error?: string; fetchedAt: number }
@@ -31,12 +32,12 @@ const emptyRoom = (roomId = "pending"): RoomState => ({
 const short = (value: string) => `${value.slice(0, 6)}…${value.slice(-4)}`
 
 export function PredictionRoom() {
+  const { wallet, activityNonce } = useWalletSession()
   const [market, setMarket] = useState<MarketView | null>(null)
   const [room, setRoom] = useState<RoomState>(emptyRoom())
   const [error, setError] = useState<string | null>(null)
   const [direction, setDirection] = useState<Direction>("UP")
   const [shares, setShares] = useState("1")
-  const [wallet, setWallet] = useState<`0x${string}` | null>(null)
   const [tradeProof, setTradeProof] = useState<TradeProof | null>(null)
   const [tradeState, setTradeState] = useState<TransactionState>("IDLE")
   const [tradeMessage, setTradeMessage] = useState("Connect a wallet to join the room.")
@@ -161,52 +162,16 @@ export function PredictionRoom() {
     }
   }
 
-  const connect = async () => {
-    const injected = provider()
-    if (!injected) {
-      setTradeState("BLOCKED")
-      setTradeMessage("No injected EVM wallet was found.")
-      return null
-    }
-    setTradeState("PREFLIGHT")
-    try {
-      await injected.request({ method: "wallet_switchEthereumChain", params: [{ chainId: `0x${DREAMDEX.chainId.toString(16)}` }] }).catch(async () => {
-        await injected.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: `0x${DREAMDEX.chainId.toString(16)}`,
-            chainName: "Somnia Shannon Testnet",
-            nativeCurrency: { name: "Somnia Test Token", symbol: "STT", decimals: 18 },
-            rpcUrls: [DREAMDEX.rpcUrl],
-            blockExplorerUrls: [DREAMDEX.explorerUrl],
-          }],
-        })
-      })
-      const accounts = (await injected.request({ method: "eth_requestAccounts" })) as `0x${string}`[]
-      const account = accounts[0]
-      if (!account) throw new Error("No wallet account was selected.")
-      setWallet(account)
-      if (market) void refreshPortfolio(account, market)
-      setTradeState("IDLE")
-      setTradeMessage("Wallet connected. Choose your conviction or place a verified trade.")
-      return account
-    } catch (reason) {
-      setTradeState("CANCELLED")
-      setTradeMessage(reason instanceof Error ? reason.message : "Wallet connection was cancelled.")
-      return null
-    }
-  }
-
   useEffect(() => {
     if (!wallet || !market) return
     setPortfolio(null)
     void refreshPortfolio(wallet, market)
-  }, [wallet, market?.id])
+  }, [wallet, market?.id, activityNonce])
 
   const submitConviction = async () => {
     if (!market?.isLive) return
-    const account = wallet || (await connect())
-    if (!account) return
+    const account = wallet
+    if (!account) { setTradeState("BLOCKED"); setTradeMessage("Connect your wallet from the navbar first."); return }
     const response = await fetch(`/api/rooms/${market.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -222,32 +187,6 @@ export function PredictionRoom() {
     setTradeMessage(`Your ${direction} conviction is in the room. This is not a trade yet.`)
   }
 
-  const claimCollateral = async () => {
-    const injected = provider()
-    const account = wallet || (await connect())
-    if (!injected || !account) return
-    setTradeState("AWAITING_SIGNATURE")
-    actionStartedAt.current = performance.now()
-    setTradeMessage("Confirm the tUSDC faucet transaction in your wallet…")
-    try {
-      const result = await faucetBrowserCollateral(injected)
-      setTradeProof({
-        hash: result.hash,
-        explorerUrl: `${DREAMDEX.explorerUrl}/tx/${result.hash}`,
-        status: "confirmed",
-      })
-      setTradeState("CONFIRMED")
-      setVerificationMs(actionStartedAt.current === null ? null : performance.now() - actionStartedAt.current)
-      setTradeMessage("10,000 tUSDC added to your wallet. You can now trade on DreamDEX.")
-      setActivities((current) => [{ kind: "FAUCET", hash: result.hash, detail: "10,000 tUSDC claimed" }, ...current])
-      await refreshPortfolio(account)
-    } catch (reason) {
-      const message = reason instanceof Error ? reason.message : "The tUSDC faucet transaction failed."
-      setTradeState(/rejected|denied|cancel/i.test(message) ? "CANCELLED" : /revert/i.test(message) ? "REVERTED" : "BLOCKED")
-      setTradeMessage(message)
-    }
-  }
-
   const trade = async () => {
     if (!market?.isLive) return
     if (["STALE", "OFFLINE"].includes(freshness)) {
@@ -256,8 +195,8 @@ export function PredictionRoom() {
       return
     }
     const injected = provider()
-    const account = wallet || (await connect())
-    if (!injected || !account) return
+    const account = wallet
+    if (!injected || !account) { setTradeState("BLOCKED"); setTradeMessage("Connect your wallet from the navbar first."); return }
     const amount = Number(shares)
     if (!Number.isFinite(amount) || amount <= 0) {
       setTradeState("BLOCKED")
@@ -408,12 +347,9 @@ export function PredictionRoom() {
 
           <details className="portfolio-disclosure"><summary>Portfolio</summary><div><span>Wallet balance</span><strong>{portfolio ? `${portfolio.collateral.toLocaleString(undefined, { maximumFractionDigits: 3 })} ${portfolio.collateralCode}` : "—"}</strong></div><div><span>UP / DOWN held</span><strong>{portfolio ? `${portfolio.upShares} / ${portfolio.downShares}` : "—"}</strong></div></details>
 
-          {!wallet && <button className="primary-button" onClick={connect} disabled={tradeState === "PREFLIGHT"}>Connect wallet</button>}
           {wallet && <button className="secondary-button" onClick={submitConviction} disabled={!market.isLive}>Add conviction only</button>}
-          <button className="secondary-button" onClick={claimCollateral} disabled={["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState)}>
-            {tradeState === "AWAITING_SIGNATURE" ? "Confirm in wallet…" : "Get 10,000 tUSDC"}
-          </button>
-          <button className="trade-button" onClick={trade} disabled={!market.isLive || ["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState) || ["STALE", "OFFLINE"].includes(freshness)}>
+          {!wallet && <p className="navbar-wallet-hint">Connect wallet and claim test collateral from the navbar.</p>}
+          <button className="trade-button" onClick={trade} disabled={!wallet || !market.isLive || ["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState) || ["STALE", "OFFLINE"].includes(freshness)}>
             {["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState) ? "Transaction in progress…" : `Trade ${direction} on DreamDEX`}
           </button>
           <p className={`trade-message ${tradeState.toLowerCase()}`} aria-live="polite">{tradeMessage}</p>

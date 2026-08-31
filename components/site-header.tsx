@@ -1,4 +1,11 @@
+"use client"
+
+import { useWalletSession } from "@/components/wallet-provider"
+
+const shortWallet = (value: string) => `${value.slice(0, 5)}…${value.slice(-4)}`
+
 export function SiteHeader({ active }: { active: "FORECASTS" | "AGENTS" | "REPUTATION" | "VERIFY" }) {
+  const { wallet, state, message, connect, claimCollateral } = useWalletSession()
   const links = [
     ["FORECASTS", "/", "Live room"],
     ["AGENTS", "/agents", "Agents"],
@@ -17,7 +24,8 @@ export function SiteHeader({ active }: { active: "FORECASTS" | "AGENTS" | "REPUT
       </nav>
       <div className="header-actions">
         <span className="network-pill"><i /> Somnia testnet</span>
-        <a className="header-cta" href="/#create">Enter room <b>→</b></a>
+        <button className="header-faucet" onClick={claimCollateral} disabled={state === "CONNECTING" || state === "CLAIMING"} title={message}>{state === "CLAIMING" ? "Claiming…" : "10K tUSDC"}</button>
+        <button className="header-cta" onClick={connect} disabled={state === "CONNECTING"} title={message}>{wallet ? shortWallet(wallet) : state === "CONNECTING" ? "Connecting…" : "Connect wallet"}<b>{wallet ? "✓" : "↗"}</b></button>
       </div>
     </header>
   )

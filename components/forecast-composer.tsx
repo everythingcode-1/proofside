@@ -5,6 +5,7 @@ import type { EIP1193Provider } from "viem"
 import { buildDecisionBrief, type DecisionSignal } from "@/lib/decision-brief"
 import type { StoredForecast } from "@/lib/forecast-store"
 import type { Direction, MarketView, RoomState } from "@/lib/types"
+import { useWalletSession } from "@/components/wallet-provider"
 
 type ForecastComposerProps = {
   market: MarketView
@@ -18,7 +19,7 @@ type ForecastComposerProps = {
 }
 
 export function ForecastComposer({ market, direction, onDirectionChange, signals, room, baselineUpPrice, onRevealChange, onReceipt }: ForecastComposerProps) {
-  const [wallet, setWallet] = useState<`0x${string}` | null>(null)
+  const { wallet } = useWalletSession()
   const [confidence, setConfidence] = useState(65)
   const [firstJudgment, setFirstJudgment] = useState<Direction>(direction)
   const [firstConfidence, setFirstConfidence] = useState<number | null>(null)
@@ -33,7 +34,6 @@ export function ForecastComposer({ market, direction, onDirectionChange, signals
 
   const brief = useMemo(() => buildDecisionBrief({ market, previousUpPrice: baselineUpPrice, judgment: firstJudgment, signals }), [market, baselineUpPrice, firstJudgment, signals])
   const provider = () => (window as Window & { ethereum?: EIP1193Provider }).ethereum
-  const connect = async () => { const injected = provider(); if (!injected) throw new Error("No EVM wallet found."); const accounts = await injected.request({ method: "eth_requestAccounts" }) as `0x${string}`[]; if (!accounts[0]) throw new Error("No wallet selected."); setWallet(accounts[0]); return accounts[0] }
 
   const reveal = () => {
     const judgedAt = Date.now()
@@ -47,7 +47,8 @@ export function ForecastComposer({ market, direction, onDirectionChange, signals
 
   const publish = async () => {
     try {
-      const account = wallet ?? await connect()
+      const account = wallet
+      if (!account) throw new Error("Connect your wallet from the navbar before signing a receipt.")
       setState("REVIEWING"); setMessage("Preparing the exact decision receipt…")
       const fields = { creatorWallet: account, marketId: market.id, initialDirection: firstJudgment, initialConfidenceBps: (firstConfidence ?? confidence) * 100, initialJudgmentAt: initialJudgmentAt ?? Date.now(), direction, confidenceBps: confidence * 100, thesis, counterCase, invalidationCondition: invalidation }
       const challengeResponse = await fetch("/api/forecasts/challenge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields) })
