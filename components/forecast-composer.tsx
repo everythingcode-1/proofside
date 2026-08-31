@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { EIP1193Provider } from "viem"
 import { buildDecisionBrief, type DecisionSignal } from "@/lib/decision-brief"
 import type { StoredForecast } from "@/lib/forecast-store"
@@ -8,6 +8,8 @@ import type { Direction, MarketView, RoomState } from "@/lib/types"
 import { useWalletSession } from "@/components/wallet-provider"
 
 type ForecastComposerProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   market: MarketView
   direction: Direction
   onDirectionChange: (direction: Direction) => void
@@ -18,7 +20,7 @@ type ForecastComposerProps = {
   onReceipt?: (receipt: StoredForecast) => void
 }
 
-export function ForecastComposer({ market, direction, onDirectionChange, signals, room, baselineUpPrice, onRevealChange, onReceipt }: ForecastComposerProps) {
+export function ForecastComposer({ open, onOpenChange, market, direction, onDirectionChange, signals, room, baselineUpPrice, onRevealChange, onReceipt }: ForecastComposerProps) {
   const { wallet } = useWalletSession()
   const [confidence, setConfidence] = useState(65)
   const [firstJudgment, setFirstJudgment] = useState<Direction>(direction)
@@ -34,6 +36,10 @@ export function ForecastComposer({ market, direction, onDirectionChange, signals
 
   const brief = useMemo(() => buildDecisionBrief({ market, previousUpPrice: baselineUpPrice, judgment: firstJudgment, signals }), [market, baselineUpPrice, firstJudgment, signals])
   const provider = () => (window as Window & { ethereum?: EIP1193Provider }).ethereum
+
+  useEffect(() => {
+    if (!open && !revealed) setFirstJudgment(direction)
+  }, [direction, open, revealed])
 
   const reveal = () => {
     const judgedAt = Date.now()
@@ -62,11 +68,20 @@ export function ForecastComposer({ market, direction, onDirectionChange, signals
     } catch (error) { setState("ERROR"); setMessage(error instanceof Error ? error.message : "Publication failed.") }
   }
 
-  return <section className="forecast-card decision-card" id="create" aria-labelledby="decision-heading">
+  if (!open) return <section className="decision-lab-launcher" id="decision-lab" aria-labelledby="decision-lab-heading">
+    <div>
+      <p className="source-label dreampulse">Optional Decision Lab</p>
+      <h3 id="decision-lab-heading">Challenge your read before or after you trade.</h3>
+      <p>Compare what changed with attributed agent evidence, then preserve the reasoning only if it helps.</p>
+    </div>
+    <button className="secondary-button" onClick={() => onOpenChange(true)}>Open Decision Lab</button>
+  </section>
+
+  return <section className="forecast-card decision-card decision-lab" id="decision-lab" aria-labelledby="decision-heading">
     <div className="forecast-card-head">
-      <p className="source-label dreampulse">Human decision lane</p>
-      <h2 id="decision-heading">Decide before the crowd decides for you.</h2>
-      <p>{revealed ? "Compare your independent view with live market and agent evidence." : "Your first answer is private. Market consensus and agent reasoning unlock afterward."}</p>
+      <div className="source-heading"><p className="source-label dreampulse">Optional Decision Lab</p><button className="lab-close" onClick={() => onOpenChange(false)}>Close</button></div>
+      <h2 id="decision-heading">Test your judgment with evidence.</h2>
+      <p>{revealed ? "Compare your independent view with live market and agent evidence." : "Your private first view is optional and never blocks DreamDEX execution."}</p>
     </div>
 
     {!revealed ? <div className="composer-form first-judgment">

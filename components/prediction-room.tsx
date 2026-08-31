@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { EIP1193Provider } from "viem"
 import { DREAMDEX } from "@/lib/config"
 import { browserPortfolio, placeBrowserOrder, watchMarketBook, type PortfolioView } from "@/lib/dreamdex"
-import { countdownLabel, durationLabel, probabilityLabel } from "@/lib/format"
+import { countdownLabel, durationLabel } from "@/lib/format"
 import { freshnessState, type FreshnessState } from "@/lib/realtime"
 import type { TransactionState } from "@/lib/transactions"
 import type { Direction, MarketView, RoomState, TradeProof } from "@/lib/types"
@@ -13,6 +13,7 @@ import { MarketOracleChart } from "@/components/market-oracle-chart"
 import { marketRefreshDelay } from "@/lib/live-refresh"
 import { ForecastComposer } from "@/components/forecast-composer"
 import { ReceiptCard } from "@/components/receipt-card"
+import { TradeTicket } from "@/components/trade-ticket"
 import { useWalletSession } from "@/components/wallet-provider"
 import type { StoredForecast } from "@/lib/forecast-store"
 
@@ -40,7 +41,7 @@ export function PredictionRoom() {
   const [shares, setShares] = useState("1")
   const [tradeProof, setTradeProof] = useState<TradeProof | null>(null)
   const [tradeState, setTradeState] = useState<TransactionState>("IDLE")
-  const [tradeMessage, setTradeMessage] = useState("Connect a wallet to join the room.")
+  const [tradeMessage, setTradeMessage] = useState("Explore both sides now. Connect a wallet only when you are ready to execute.")
   const [now, setNow] = useState(Date.now())
   const [streamState, setStreamState] = useState<FreshnessState>("OFFLINE")
   const [lastVerifiedAt, setLastVerifiedAt] = useState<number | null>(null)
@@ -51,7 +52,7 @@ export function PredictionRoom() {
   const [attribution, setAttribution] = useState<{ agent: string; signal: string; name?: string } | null>(null)
   const [verificationMs, setVerificationMs] = useState<number | null>(null)
   const [createdReceipt, setCreatedReceipt] = useState<StoredForecast | null>(null)
-  const [analysisRevealed, setAnalysisRevealed] = useState(false)
+  const [decisionLabOpen, setDecisionLabOpen] = useState(false)
   const [decisionBaseline, setDecisionBaseline] = useState<{ marketId: string; upPrice: number | null } | null>(null)
   const actionStartedAt = useRef<number | null>(null)
   const marketRef = useRef<MarketView | null>(null)
@@ -79,7 +80,7 @@ export function PredictionRoom() {
         setRoom(emptyRoom(payload.market.id))
         setSignals([])
         setAttribution(null)
-        setAnalysisRevealed(false)
+        setDecisionLabOpen(false)
         setCreatedReceipt(null)
       }
       marketRef.current = payload.market
@@ -297,81 +298,50 @@ export function PredictionRoom() {
           <div className="source-divider"><span className="source-label somnia">Somnia oracle data</span><small>{market.asset}/USDC live reference</small></div>
           <MarketOracleChart market={market} />
 
-          <div className="source-divider"><span className="source-label dreamdex">DreamDEX order book</span><small>{analysisRevealed ? "Executable market probability" : "Hidden until first judgment"}</small></div>
-          {analysisRevealed ? <div className="odds-grid">
-            <button className={`odds-card up ${direction === "UP" ? "selected" : ""}`} onClick={() => setDirection("UP")} disabled={!market.isLive}>
-              <span>▲ UP</span><strong>{probabilityLabel(market.upPrice)}</strong><small>backs YES</small>
-            </button>
-            <button className={`odds-card down ${direction === "DOWN" ? "selected" : ""}`} onClick={() => setDirection("DOWN")} disabled={!market.isLive}>
-              <span>▼ DOWN</span><strong>{probabilityLabel(market.downPrice)}</strong><small>backs NO</small>
-            </button>
-          </div> : <div className="consensus-lock"><span>PRIVATE FIRST</span><strong>Market odds are intentionally concealed.</strong><p>Commit your independent direction and confidence in the Human Decision Lane to reveal them.</p></div>}
-
-          <div className="market-handoff">
-            <span>Next</span>
-            <p>Record an independent judgment before DreamPulse reveals agent and room consensus.</p>
-          </div>
         </section>
-        <ForecastComposer
-          key={market.id}
-          market={market}
+        <TradeTicket
+          wallet={wallet}
           direction={direction}
+          upPrice={market.upPrice}
+          downPrice={market.downPrice}
+          shares={shares}
+          maxLoss={maxLoss}
+          portfolio={portfolio}
+          marketLive={market.isLive}
+          executionBlocked={["STALE", "OFFLINE"].includes(freshness)}
+          tradePending={["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState)}
+          tradeMessage={tradeMessage}
+          tradeState={tradeState}
+          tradeProof={tradeProof}
+          activities={activities}
+          marketId={market.id}
+          contractAddress={market.contractAddress}
+          attribution={attribution}
           onDirectionChange={(next) => { setDirection(next); setAttribution(null) }}
-          signals={signals.map((signal) => ({ direction: signal.direction, confidence: signal.confidence, reason: signal.reason, agentName: signal.agent.name }))}
-          room={room}
-          baselineUpPrice={decisionBaseline?.marketId === market.id ? decisionBaseline.upPrice : market.upPrice}
-          onRevealChange={(revealed, baselineUpPrice) => { setAnalysisRevealed(revealed); setDecisionBaseline({ marketId: market.id, upPrice: baselineUpPrice }) }}
-          onReceipt={setCreatedReceipt}
+          onSharesChange={setShares}
+          onAddConviction={submitConviction}
+          onTrade={trade}
         />
       </div>
 
-      <div className="post-forecast-grid">
-        <section className="receipt-stage" aria-live="polite">
-          {createdReceipt ? <ReceiptCard receipt={createdReceipt} /> : <div className="receipt-placeholder"><span className="source-label dreampulse">Decision memory</span><h3>Your signed decision appears here.</h3><p>Preserve the reasoning without trading; economic backing remains optional.</p></div>}
-        </section>
-        <aside className="action-panel" aria-label="Optional DreamDEX economic backing">
-          <p className="source-label dreamdex">Optional DreamDEX backing</p>
-          {!analysisRevealed ? <div className="execution-lock"><span>LOCKED</span><h3>Execution follows judgment.</h3><p>Reveal the decision analysis before viewing executable odds or preparing a DreamDEX order.</p></div> : <>
-          <div className="section-heading"><span>Your position</span><small>{wallet ? short(wallet) : "wallet not connected"}</small></div>
-          {attribution && <p className="signal-attribution">Signal from {attribution.name || short(attribution.agent)}; review before signing.</p>}
-          <div className="direction-review"><span>Conviction</span><strong className={direction.toLowerCase()}>{direction === "UP" ? "▲" : "▼"} {direction}</strong></div>
+      <ForecastComposer
+        key={market.id}
+        open={decisionLabOpen}
+        onOpenChange={setDecisionLabOpen}
+        market={market}
+        direction={direction}
+        onDirectionChange={(next) => { setDirection(next); setAttribution(null) }}
+        signals={signals.map((signal) => ({ direction: signal.direction, confidence: signal.confidence, reason: signal.reason, agentName: signal.agent.name }))}
+        room={room}
+        baselineUpPrice={decisionBaseline?.marketId === market.id ? decisionBaseline.upPrice : market.upPrice}
+        onRevealChange={(_revealed, baselineUpPrice) => setDecisionBaseline({ marketId: market.id, upPrice: baselineUpPrice })}
+        onReceipt={setCreatedReceipt}
+      />
 
-          <label htmlFor="shares">Shares</label>
-          <div className="amount-input"><input id="shares" inputMode="decimal" value={shares} onChange={(event) => setShares(event.target.value)} /><span>contracts</span></div>
-
-          <div className="risk-box">
-            <div><span>Live price</span><strong>{probabilityLabel(selectedPrice)}</strong></div>
-            <div><span>Maximum loss</span><strong>{maxLoss === null ? "—" : `${maxLoss.toFixed(2)} tUSDC`}</strong></div>
-            <div><span>Execution</span><strong>DreamDEX IOC</strong></div>
-          </div>
-
-          <details className="portfolio-disclosure"><summary>Portfolio</summary><div><span>Wallet balance</span><strong>{portfolio ? `${portfolio.collateral.toLocaleString(undefined, { maximumFractionDigits: 3 })} ${portfolio.collateralCode}` : "—"}</strong></div><div><span>UP / DOWN held</span><strong>{portfolio ? `${portfolio.upShares} / ${portfolio.downShares}` : "—"}</strong></div></details>
-
-          {wallet && <button className="secondary-button" onClick={submitConviction} disabled={!market.isLive}>Add conviction only</button>}
-          {!wallet && <p className="navbar-wallet-hint">Connect wallet and claim test collateral from the navbar.</p>}
-          <button className="trade-button" onClick={trade} disabled={!wallet || !market.isLive || ["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState) || ["STALE", "OFFLINE"].includes(freshness)}>
-            {["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState) ? "Transaction in progress…" : `Trade ${direction} on DreamDEX`}
-          </button>
-          <p className={`trade-message ${tradeState.toLowerCase()}`} aria-live="polite">{tradeMessage}</p>
-
-          {tradeProof && <div className="proof-panel">
-            <div className="section-heading"><span>Onchain proof</span><small>authoritative</small></div>
-            <dl>
-              <div><dt>Network</dt><dd>Somnia · 50312</dd></div>
-              <div><dt>Market ID</dt><dd title={market.id}>{short(market.id)}</dd></div>
-              <div><dt>Pool</dt><dd title={market.contractAddress}>{short(market.contractAddress)}</dd></div>
-              <div><dt>Transaction</dt><dd><a href={tradeProof.explorerUrl} target="_blank" rel="noreferrer">{short(tradeProof.hash)} ↗</a></dd></div>
-            </dl>
-            {activities.length > 0 && <dl>
-              {activities.slice(0, 4).map((activity) => <div key={`${activity.kind}-${activity.hash}`}>
-                <dt>{activity.kind}</dt>
-                <dd><a href={`${DREAMDEX.explorerUrl}/tx/${activity.hash}`} target="_blank" rel="noreferrer" title={activity.detail}>{activity.detail} ↗</a></dd>
-              </div>)}
-            </dl>}
-          </div>}
-          </>}
-        </aside>
-      </div>
+      {createdReceipt && <section className="created-receipt" aria-live="polite">
+        <div className="section-title compact-title"><p className="eyebrow">Decision memory</p><h2>Your reasoning is now verifiable.</h2></div>
+        <ReceiptCard receipt={createdReceipt} />
+      </section>}
     </section>
   )
 }
