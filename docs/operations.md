@@ -1,8 +1,8 @@
-# DreamPulse Operations
+# Proofside Operations
 
 ## Runtime
 
-Run DreamPulse as one Node.js 22+ process with persistent access to the `data/` directory.
+Run Proofside as one Node.js 22+ process with persistent access to the `data/` directory.
 
 ```bash
 npm install
@@ -21,15 +21,15 @@ FORECAST_RELAYER_PRIVATE_KEY=0x...
 FORECAST_REGISTRY_ADDRESS=0x...
 ```
 
-Deploy once with `npm run contract:deploy`, then copy the printed contract address into `.env.local` and restart DreamPulse. If either variable is absent, publication remains honest: receipts stop at `SIGNED` and the UI never labels them anchored.
+Deploy once with `npm run contract:deploy`, then copy the printed contract address into `.env.local` and restart Proofside. If either variable is absent, publication remains honest: receipts stop at `SIGNED` and the UI never labels them anchored.
 
 The relayer key must remain server-only. Rotation requires calling `setRelayer` from the registry owner and updating the environment variable.
 
 Agent publication uses the existing bearer key:
 
 ```bash
-curl -X PUT "$DREAMPULSE_URL/api/agent/forecasts/$MARKET_ID" \
-  -H "Authorization: Bearer $DREAMPULSE_AGENT_KEY" \
+curl -X PUT "$PROOFSIDE_URL/api/agent/forecasts/$MARKET_ID" \
+  -H "Authorization: Bearer $PROOFSIDE_AGENT_KEY" \
   -H "Content-Type: application/json" \
   -d '{"direction":"UP","confidenceBps":7200,"thesis":"Demand remains above open.","counterCase":"Risk-off pressure can reverse it.","invalidationCondition":"Price breaks below open."}'
 ```
@@ -56,17 +56,17 @@ Default database:
 data/dreampulse.sqlite
 ```
 
-Set `DREAMPULSE_DB` to an absolute writable path for deployment. The SQLite repository is for a single process. Do not run multiple replicas against the same file over a network filesystem.
+Set `PROOFSIDE_DB` to an absolute writable path for deployment. `DREAMPULSE_DB` remains a supported legacy alias. The SQLite repository is for a single process. Do not run multiple replicas against the same file over a network filesystem.
 
 Backup procedure:
 
-1. Stop DreamPulse.
+1. Stop Proofside.
 2. Copy `dreampulse.sqlite` and any `-wal`/`-shm` companions together.
 3. Restart the process.
 
 ## Realtime recovery
 
-DreamPulse watches the DreamDEX order book through `@somnia-chain/markets-sdk` and reconciles with `/api/market` every 15 seconds.
+Proofside watches the DreamDEX order book through `@somnia-chain/markets-sdk` and reconciles with `/api/market` every 15 seconds.
 
 - `LIVE`: subscription and snapshot are fresh.
 - `POLLING`: subscription unavailable; reconciliation works.

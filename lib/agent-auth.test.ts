@@ -18,8 +18,8 @@ describe("agent auth", () => {
       }),
     ).toBe(
       [
-        "DreamPulse Agent Protocol",
-        "Domain: DreamPulse",
+        "Proofside Agent Protocol",
+        "Domain: Proofside",
         "Chain ID: 50312",
         "Wallet: 0xabc",
         "Purpose: REGISTER",
@@ -33,7 +33,7 @@ describe("agent auth", () => {
     const raw = createAgentKey()
     const hash = hashAgentKey(raw)
 
-    expect(raw.startsWith("dp_agent_")).toBe(true)
+    expect(raw.startsWith("ps_agent_")).toBe(true)
     expect(raw).not.toBe(hash)
     expect(hash).toMatch(/^[a-f0-9]{64}$/)
     expect(matchesAgentKey(raw, hash)).toBe(true)

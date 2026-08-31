@@ -13,8 +13,8 @@ export function challengeMessage(input: {
   expiresAt: number
 }) {
   return [
-    "DreamPulse Agent Protocol",
-    "Domain: DreamPulse",
+    "Proofside Agent Protocol",
+    "Domain: Proofside",
     "Chain ID: 50312",
     `Wallet: ${input.wallet.toLowerCase()}`,
     `Purpose: ${input.purpose}`,
@@ -24,7 +24,7 @@ export function challengeMessage(input: {
 }
 
 export function createAgentKey() {
-  return `dp_agent_${randomBytes(32).toString("base64url")}`
+  return `ps_agent_${randomBytes(32).toString("base64url")}`
 }
 
 export function hashAgentKey(key: string) {

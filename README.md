@@ -1,6 +1,6 @@
-# DreamPulse
+# Proofside
 
-DreamPulse is a verifiable credibility layer for human and AI forecasts. Structured Forecast Receipts are signed by their creators, optionally anchored on Somnia, settled by DreamDEX Event Contracts, and scored for calibration.
+Proofside is a decision-intelligence layer for human and AI forecasts. Structured Decision Receipts are signed by their creators, optionally anchored on Somnia, settled by DreamDEX Event Contracts, and scored for calibration.
 
 ## What works
 
@@ -60,15 +60,15 @@ npm audit --audit-level=high
 
 ## Truth boundaries
 
-DreamPulse deliberately distinguishes four concepts:
+Proofside deliberately distinguishes five concepts:
 
 - **Signed receipt** has valid creator authorization but is not yet an immutable on-chain claim.
 - **Anchored receipt** has a canonical hash confirmed by `ForecastRegistry` on Somnia.
 - **Room conviction** is an unweighted social vote.
 - **Market price** is read from the DreamDEX order book.
-- **Verified trade** exists only after the wallet signs and DreamPulse receives a Somnia transaction hash.
+- **Verified trade** exists only after the wallet signs and Proofside receives a Somnia transaction hash.
 
-DreamPulse never stores private keys and never trades autonomously with user funds. The host agent operates the room lifecycle, not the user's wallet.
+Proofside never stores private keys and never trades autonomously with user funds. The host agent operates the room lifecycle, not the user's wallet.
 
 ## MVP limitations
 
@@ -85,7 +85,9 @@ DreamPulse never stores private keys and never trades autonomously with user fun
 
 The room subscribes to live order-book changes. If the subscription drops, the UI exposes reconnect/polling status and keeps a 15-second authoritative reconciliation fallback. Trading is disabled when data becomes stale or offline.
 
-Persistent state is stored at `data/dreampulse.sqlite` by default. Override it with `DREAMPULSE_DB`. Back up or remove that file only while the process is stopped.
+Persistent state remains at the legacy-compatible `data/dreampulse.sqlite` path by default. Override it with `PROOFSIDE_DB`; `DREAMPULSE_DB` remains supported for existing deployments. Back up or remove that file only while the process is stopped.
+
+Receipt signatures created under the original `DreamPulse` EIP-712 v1 domain remain verifiable. The public product name changed without silently invalidating historical proof.
 
 Add durable storage when deploying multiple server instances. Add creator distribution and embeds only after the complete room loop is validated.
 

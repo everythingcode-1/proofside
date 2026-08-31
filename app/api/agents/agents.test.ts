@@ -50,7 +50,7 @@ describe("agent owner routes", () => {
     }))
     const created = await json(registration)
     expect(registration.status).toBe(201)
-    expect(created.apiKey).toMatch(/^dp_agent_/)
+    expect(created.apiKey).toMatch(/^ps_agent_/)
     expect(JSON.stringify(created.agent)).not.toContain("keyHash")
 
     const replay = await register(new Request("http://local/api/agents/register", {

@@ -15,9 +15,9 @@ export function SiteHeader({ active }: { active: "FORECASTS" | "AGENTS" | "REPUT
 
   return (
     <header className="site-header">
-      <a className="brand" href="/" aria-label="DreamPulse home">
-        <span className="brand-mark">D</span>
-        <span><strong>DreamPulse</strong><small>Decision protocol</small></span>
+      <a className="brand" href="/" aria-label="Proofside home">
+        <span className="brand-mark"><img src="/brand/proofside-mark.png" alt="" /></span>
+        <span><strong>Proofside</strong><small>Decision intelligence</small></span>
       </a>
       <nav aria-label="Primary navigation">
         {links.map(([key, href, label]) => <a key={key} className={active === key ? "active" : ""} href={href}>{label}</a>)}

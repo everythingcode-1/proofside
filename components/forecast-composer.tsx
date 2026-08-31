@@ -70,7 +70,7 @@ export function ForecastComposer({ open, onOpenChange, market, direction, onDire
 
   if (!open) return <section className="decision-lab-launcher" id="decision-lab" aria-labelledby="decision-lab-heading">
     <div>
-      <p className="source-label dreampulse">Optional Decision Lab</p>
+      <p className="source-label proofside">Optional Decision Lab</p>
       <h3 id="decision-lab-heading">Challenge your read before or after you trade.</h3>
       <p>Compare what changed with attributed agent evidence, then preserve the reasoning only if it helps.</p>
     </div>
@@ -79,7 +79,7 @@ export function ForecastComposer({ open, onOpenChange, market, direction, onDire
 
   return <section className="forecast-card decision-card decision-lab" id="decision-lab" aria-labelledby="decision-heading">
     <div className="forecast-card-head">
-      <div className="source-heading"><p className="source-label dreampulse">Optional Decision Lab</p><button className="lab-close" onClick={() => onOpenChange(false)}>Close</button></div>
+      <div className="source-heading"><p className="source-label proofside">Optional Decision Lab</p><button className="lab-close" onClick={() => onOpenChange(false)}>Close</button></div>
       <h2 id="decision-heading">Test your judgment with evidence.</h2>
       <p>{revealed ? "Compare your independent view with live market and agent evidence." : "Your private first view is optional and never blocks DreamDEX execution."}</p>
     </div>
@@ -92,7 +92,7 @@ export function ForecastComposer({ open, onOpenChange, market, direction, onDire
       </div>
       <label>Initial confidence <strong>{confidence}%</strong><input type="range" min="1" max="99" value={confidence} onChange={(event) => setConfidence(Number(event.target.value))} /></label>
       <button className="trade-button" onClick={reveal}>Lock judgment & reveal analysis</button>
-      <p className="privacy-note"><span>LOCAL</span> DreamPulse does not send this judgment until you explicitly sign a receipt.</p>
+      <p className="privacy-note"><span>LOCAL</span> Proofside does not send this judgment until you explicitly sign a receipt.</p>
     </div> : <div className="composer-form decision-reveal">
       <div className="decision-step"><span>02</span><strong>Challenge the judgment</strong><small>First view: {firstJudgment} · {firstConfidence}%</small></div>
 

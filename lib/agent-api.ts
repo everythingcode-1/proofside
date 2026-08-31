@@ -51,7 +51,7 @@ export function publicAgent(agent: AgentRecord) {
 export function authenticateAgent(request: Request) {
   const authorization = request.headers.get("authorization")
   const raw = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : ""
-  if (!raw.startsWith("dp_agent_")) return { error: apiError("INVALID_API_KEY", "A valid agent Bearer key is required.", 401) }
+  if (!raw.startsWith("ps_agent_") && !raw.startsWith("dp_agent_")) return { error: apiError("INVALID_API_KEY", "A valid agent Bearer key is required.", 401) }
   const match = getAgentStore().findAgentByKeyHash(hashAgentKey(raw))
   if (!match) return { error: apiError("INVALID_API_KEY", "A valid agent Bearer key is required.", 401) }
   if (match.agent.status === "REVOKED" || match.keyRevoked) {

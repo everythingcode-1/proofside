@@ -94,7 +94,7 @@ export function PredictionRoom() {
       if (marketRef.current?.id === payload.market.id && signalResponse.ok) setSignals(((await signalResponse.json()) as { signals: AgentSignal[] }).signals)
     } catch {
       setStreamState("RECONNECTING")
-      setError("DreamPulse is reconnecting to its server and DreamDEX.")
+      setError("Proofside is reconnecting to its server and DreamDEX.")
     } finally {
       refreshingMarket.current = false
     }
@@ -192,7 +192,7 @@ export function PredictionRoom() {
     if (!market?.isLive) return
     if (["STALE", "OFFLINE"].includes(freshness)) {
       setTradeState("BLOCKED")
-      setTradeMessage("Market data is stale. Wait for DreamPulse to reconnect before trading.")
+      setTradeMessage("Market data is stale. Wait for Proofside to reconnect before trading.")
       return
     }
     const injected = provider()
@@ -271,7 +271,7 @@ export function PredictionRoom() {
   const selectedPrice = direction === "UP" ? market.upPrice : market.downPrice
   const maxLoss = selectedPrice === null ? null : Number(shares || 0) * selectedPrice
   return (
-    <section className="room-shell" aria-label="Live DreamPulse room">
+    <section className="room-shell" aria-label="Live Proofside room">
       <div className="market-status-bar" aria-live="polite">
         <div className="status-source"><span className={`live-dot ${freshness.toLowerCase()}`} /><span><small>Live market</small><strong>{freshnessLabel}</strong></span></div>
         <div><small>Somnia network</small><strong>50312</strong></div>

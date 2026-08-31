@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs"
 import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 
-export function openDatabase(filename = process.env.DREAMPULSE_DB || path.join(process.cwd(), "data", "dreampulse.sqlite")) {
+export function openDatabase(filename = process.env.PROOFSIDE_DB || process.env.DREAMPULSE_DB || path.join(process.cwd(), "data", "dreampulse.sqlite")) {
   if (filename !== ":memory:") mkdirSync(path.dirname(filename), { recursive: true })
   const db = new DatabaseSync(filename)
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")
