@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server"
 import { createPublicClient, http } from "viem"
 import { DREAMDEX, somniaTestnet } from "@/lib/config"
-import { currentMarket } from "@/lib/dreamdex"
+import { loadSnapshotMarket } from "../../../lib/market-snapshot"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   const startedAt = Date.now()
   const client = createPublicClient({ chain: somniaTestnet, transport: http(DREAMDEX.rpcUrl) })
-  const [block, market] = await Promise.allSettled([client.getBlockNumber(), currentMarket()])
+  const [block, market] = await Promise.allSettled([client.getBlockNumber(), loadSnapshotMarket()])
   const rpcHealthy = block.status === "fulfilled"
   const marketHealthy = market.status === "fulfilled"
   const status = rpcHealthy && marketHealthy ? 200 : rpcHealthy || marketHealthy ? 207 : 503

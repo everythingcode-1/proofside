@@ -55,4 +55,28 @@ describe("TradeTicket", () => {
     expect(tradeButton).not.toContain("disabled")
     expect(html).not.toContain("Decide before the crowd")
   })
+
+  it("warns before an unauthenticated preview exceeds the standard test collateral", () => {
+    const html = renderToStaticMarkup(
+      <TradeTicket {...baseProps} shares="1000000" maxLoss={720000} />,
+    )
+
+    expect(html).toContain("exceeds the standard 10,000 tUSDC test balance")
+  })
+
+  it("warns about snapshot collateral without blocking a freshly quoted preflight", () => {
+    const html = renderToStaticMarkup(
+      <TradeTicket
+        {...baseProps}
+        wallet="0x1234567890123456789012345678901234567890"
+        portfolio={{ collateral: 1, collateralCode: "tUSDC", upShares: 0, downShares: 0 }}
+        maxLoss={1.44}
+      />,
+    )
+
+    expect(html).toContain("Insufficient tUSDC collateral")
+    const tradeButton = html.match(/<button[^>]*aria-label="Trade UP on DreamDEX"[^>]*>/)?.[0]
+    expect(tradeButton).not.toContain("disabled")
+    expect(html).toContain('aria-describedby="sizing-message"')
+  })
 })

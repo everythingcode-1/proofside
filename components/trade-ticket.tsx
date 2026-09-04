@@ -59,6 +59,18 @@ export function TradeTicket({
 }: TradeTicketProps) {
   const selectedPrice = direction === "UP" ? upPrice : downPrice
   const tradeLabel = wallet ? `Trade ${direction} on DreamDEX` : "Connect wallet to trade"
+  const amount = Number(shares)
+  const invalidAmount = !Number.isFinite(amount) || amount <= 0
+  const insufficientCollateral = Boolean(wallet && portfolio && maxLoss !== null && maxLoss > portfolio.collateral)
+  const previewExceedsFaucet = Boolean(!wallet && maxLoss !== null && maxLoss > 10_000)
+  const sizingBlocked = invalidAmount
+  const sizingMessage = invalidAmount
+    ? "Enter a contract amount greater than zero."
+    : insufficientCollateral
+      ? `Insufficient ${portfolio?.collateralCode ?? "tUSDC"} collateral for this maximum loss.`
+      : previewExceedsFaucet
+        ? "This preview exceeds the standard 10,000 tUSDC test balance. Connect a wallet to check actual collateral and executable liquidity."
+        : null
 
   return (
     <aside className="trade-ticket action-panel" aria-label="DreamDEX order ticket">
@@ -82,9 +94,10 @@ export function TradeTicket({
 
       <label htmlFor="shares">Contracts</label>
       <div className="amount-input">
-        <input id="shares" inputMode="decimal" value={shares} onChange={(event) => onSharesChange(event.target.value)} />
+        <input id="shares" type="number" inputMode="decimal" min="0" step="any" aria-invalid={invalidAmount} aria-describedby={sizingMessage ? "sizing-message" : undefined} value={shares} onChange={(event) => onSharesChange(event.target.value)} />
         <span>contracts</span>
       </div>
+      {sizingMessage && <p id="sizing-message" className={`sizing-message ${invalidAmount ? "error" : "warning"}`} role={invalidAmount ? "alert" : "status"}>{sizingMessage}</p>}
 
       <div className="risk-box">
         <div><span>Selected side</span><strong className={direction.toLowerCase()}>{direction === "UP" ? "▲" : "▼"} {direction}</strong></div>
@@ -104,7 +117,7 @@ export function TradeTicket({
         className="trade-button"
         aria-label={wallet ? `Trade ${direction} on DreamDEX` : "Connect wallet to trade"}
         onClick={onTrade}
-        disabled={!wallet || !marketLive || executionBlocked || tradePending}
+        disabled={!wallet || !marketLive || executionBlocked || tradePending || sizingBlocked}
       >
         {tradePending ? "Transaction in progress…" : tradeLabel}
       </button>

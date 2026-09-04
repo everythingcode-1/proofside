@@ -147,8 +147,10 @@ export function PredictionRoom() {
     lastVerifiedAt,
     now,
   })
-  const freshnessLabel = freshness === "RECONNECTING" && lastVerifiedAt && now - lastVerifiedAt <= 20_000
-    ? "POLLING · WS RECONNECTING"
+  const hasFreshFallback = freshness === "RECONNECTING" && lastVerifiedAt && now - lastVerifiedAt <= 20_000
+  const displayedFreshness = hasFreshFallback ? "POLLING" : freshness
+  const freshnessLabel = hasFreshFallback
+    ? "LIVE · POLLING FALLBACK"
     : freshness
 
   const provider = () => (window as Window & { ethereum?: EIP1193Provider }).ethereum
@@ -273,7 +275,7 @@ export function PredictionRoom() {
   return (
     <section className="room-shell" aria-label="Live Proofside room">
       <div className="market-status-bar" aria-live="polite">
-        <div className="status-source"><span className={`live-dot ${freshness.toLowerCase()}`} /><span><small>Live market</small><strong>{freshnessLabel}</strong></span></div>
+        <div className="status-source"><span className={`live-dot ${displayedFreshness.toLowerCase()}`} /><span><small>Live market</small><strong>{freshnessLabel}</strong></span></div>
         <div><small>Somnia network</small><strong>50312</strong></div>
         <div><small>Last market update</small><strong>{lastVerifiedAt ? new Date(lastVerifiedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</strong></div>
         <div><small>Wallet</small><strong>{tradeState === "CONFIRMED" ? speedLabel(verificationMs) : wallet ? "Ready" : "Not connected"}</strong></div>

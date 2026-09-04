@@ -2,8 +2,8 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react"
 import type { EIP1193Provider } from "viem"
-import { DREAMDEX } from "@/lib/config"
-import { faucetBrowserCollateral } from "@/lib/dreamdex"
+import { DREAMDEX } from "../lib/config"
+import { faucetBrowserCollateral } from "../lib/dreamdex"
 
 type WalletSession = {
   wallet: `0x${string}` | null
@@ -26,7 +26,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const connect = async () => {
     const provider = injectedProvider()
-    if (!provider) { setState("ERROR"); setMessage("No injected EVM wallet was found."); return null }
+    if (!provider) { setState("ERROR"); setMessage("No injected EVM wallet was found. Install or enable a browser wallet, then try again."); return null }
     setState("CONNECTING"); setMessage("Confirm the Somnia network and account in your wallet…")
     try {
       await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: `0x${DREAMDEX.chainId.toString(16)}` }] }).catch(async () => {

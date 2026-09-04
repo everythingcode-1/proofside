@@ -18,6 +18,16 @@ vi.mock("viem", async (importOriginal) => ({
   })),
 }))
 
+import {
+  browserExchange,
+  browserPortfolio,
+  faucetBrowserCollateral,
+  orderExecution,
+  portfolioFromBalances,
+  readWithRpcFallback,
+  sortMarketCandidates,
+} from "./dreamdex"
+
 describe("browserExchange", () => {
   beforeEach(() => {
     loadMarkets.mockClear()
@@ -28,7 +38,6 @@ describe("browserExchange", () => {
   })
 
   it("loads the symbol registry before returning a wallet exchange", async () => {
-    const { browserExchange } = await import("./dreamdex")
     await browserExchange({ request: vi.fn(), on: vi.fn(), removeListener: vi.fn() })
 
     expect(loadMarkets).toHaveBeenCalledOnce()
@@ -38,7 +47,6 @@ describe("browserExchange", () => {
   })
 
   it("claims test collateral through the DreamDEX faucet", async () => {
-    const { faucetBrowserCollateral } = await import("./dreamdex")
     const result = await faucetBrowserCollateral({ request: vi.fn(), on: vi.fn(), removeListener: vi.fn() })
 
     expect(faucet).toHaveBeenCalledOnce()
@@ -49,7 +57,6 @@ describe("browserExchange", () => {
 
 describe("DreamDEX account views", () => {
   it("falls back to HTTP when the SDK WebSocket market read fails", async () => {
-    const { readWithRpcFallback } = await import("./dreamdex")
     const fallback = vi.fn(async () => ({ status: 1 }))
 
     await expect(readWithRpcFallback(async () => { throw new Error("WebSocket request failed") }, fallback)).resolves.toEqual({ status: 1 })
@@ -57,7 +64,6 @@ describe("DreamDEX account views", () => {
   })
 
   it("selects the same market when BTC and ETH share an expiry", async () => {
-    const { sortMarketCandidates } = await import("./dreamdex")
     const btc = { symbol: "BTC", info: { expiry: 200, marketId: "0x02" } }
     const eth = { symbol: "ETH", info: { expiry: 200, marketId: "0x01" } }
 
@@ -66,7 +72,6 @@ describe("DreamDEX account views", () => {
   })
 
   it("summarizes a partial fill using receipt fills", async () => {
-    const { orderExecution } = await import("./dreamdex")
     const execution = orderExecution({
       amount: 2,
       filled: 1,
@@ -80,7 +85,6 @@ describe("DreamDEX account views", () => {
   })
 
   it("complements the YES fill price for a DOWN contract", async () => {
-    const { orderExecution } = await import("./dreamdex")
     const execution = orderExecution({
       amount: 1,
       filled: 1,
@@ -94,7 +98,6 @@ describe("DreamDEX account views", () => {
   })
 
   it("maps collateral and market outcomes from SDK balances", async () => {
-    const { portfolioFromBalances } = await import("./dreamdex")
     expect(portfolioFromBalances({
       tUSDC: { free: 9999.279, used: 0, total: 9999.279 },
       "ETH/tUSDC#YES": { free: 1, used: 0, total: 1 },
@@ -109,7 +112,6 @@ describe("DreamDEX account views", () => {
   it("reads a connected wallet portfolio and closes the exchange", async () => {
     fetchBalance.mockClear()
     close.mockClear()
-    const { browserPortfolio } = await import("./dreamdex")
     const result = await browserPortfolio(
       { request: vi.fn(), on: vi.fn(), removeListener: vi.fn() },
       { yesSymbol: "ETH/tUSDC#YES", noSymbol: "ETH/tUSDC#NO" },

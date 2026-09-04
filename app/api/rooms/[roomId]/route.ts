@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { isAddress, isHash } from "viem"
-import { currentMarket } from "@/lib/dreamdex"
+import { loadSnapshotMarket } from "../../../../lib/market-snapshot"
 import { associateTransaction, getRoom, setConviction } from "@/lib/room-store"
 import { createRateLimiter } from "@/lib/rate-limit"
 import { getAgentStore } from "@/lib/agent-store"
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest, context: Context) {
     return NextResponse.json({ error: "Transaction hash is invalid." }, { status: 400 })
   }
 
-  const market = await currentMarket().catch(() => null)
+  const market = await loadSnapshotMarket().catch(() => null)
   if (!market || market.id !== roomId || !market.isLive) {
     return NextResponse.json({ error: "This room is no longer accepting conviction updates." }, { status: 409 })
   }
