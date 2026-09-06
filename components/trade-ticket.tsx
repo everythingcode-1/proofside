@@ -1,7 +1,7 @@
 "use client"
 
 import { DREAMDEX } from "../lib/config"
-import type { PortfolioView } from "../lib/dreamdex"
+import type { ExecutionEstimate, PortfolioView } from "../lib/dreamdex"
 import { probabilityLabel } from "../lib/format"
 import type { TransactionState } from "../lib/transactions"
 import type { Direction, TradeProof } from "../lib/types"
@@ -16,6 +16,7 @@ type TradeTicketProps = {
   shares: string
   maxLoss: number | null
   portfolio: PortfolioView | null
+  executionEstimate: ExecutionEstimate | null
   marketLive: boolean
   executionBlocked: boolean
   tradePending: boolean
@@ -42,6 +43,7 @@ export function TradeTicket({
   shares,
   maxLoss,
   portfolio,
+  executionEstimate,
   marketLive,
   executionBlocked,
   tradePending,
@@ -78,14 +80,14 @@ export function TradeTicket({
         <span className="source-label dreamdex">DreamDEX execution</span>
         <span>{wallet ? short(wallet) : "Wallet optional to explore"}</span>
       </div>
-      <h3>Choose a side.</h3>
-      <p className="ticket-copy">Set your exposure and review the maximum loss before signing.</p>
+      <h3>Trade UP or DOWN.</h3>
+      <p className="ticket-copy">Choose a side, set the number of contracts, and review your maximum loss.</p>
 
       <div className="odds-grid" aria-label="DreamDEX outcome prices">
-        <button className={`odds-card up ${direction === "UP" ? "selected" : ""}`} onClick={() => onDirectionChange("UP")} disabled={!marketLive}>
+        <button className={`odds-card up ${direction === "UP" ? "selected" : ""}`} aria-pressed={direction === "UP"} onClick={() => onDirectionChange("UP")} disabled={!marketLive}>
           <span>▲ UP</span><strong>{probabilityLabel(upPrice)}</strong><small>backs YES</small>
         </button>
-        <button className={`odds-card down ${direction === "DOWN" ? "selected" : ""}`} onClick={() => onDirectionChange("DOWN")} disabled={!marketLive}>
+        <button className={`odds-card down ${direction === "DOWN" ? "selected" : ""}`} aria-pressed={direction === "DOWN"} onClick={() => onDirectionChange("DOWN")} disabled={!marketLive}>
           <span>▼ DOWN</span><strong>{probabilityLabel(downPrice)}</strong><small>backs NO</small>
         </button>
       </div>
@@ -103,8 +105,11 @@ export function TradeTicket({
         <div><span>Selected side</span><strong className={direction.toLowerCase()}>{direction === "UP" ? "▲" : "▼"} {direction}</strong></div>
         <div><span>Live price</span><strong>{probabilityLabel(selectedPrice)}</strong></div>
         <div><span>Maximum loss</span><strong>{maxLoss === null ? "—" : `${maxLoss.toFixed(2)} tUSDC`}</strong></div>
+        <div><span>Estimated fill</span><strong>{executionEstimate ? `${executionEstimate.estimatedFill.toFixed(2)} / ${executionEstimate.requested}` : "Checking…"}</strong></div>
+        <div><span>Average price</span><strong>{probabilityLabel(executionEstimate?.averagePrice ?? null)}</strong></div>
         <div><span>Execution</span><strong>DreamDEX IOC</strong></div>
       </div>
+      {executionEstimate && !executionEstimate.sufficientLiquidity && <p className="sizing-message warning" role="status">Current depth can fill only {executionEstimate.estimatedFill.toFixed(2)} of {executionEstimate.requested} contracts. IOC remainder will not rest.</p>}
 
       <details className="portfolio-disclosure">
         <summary>Wallet & portfolio</summary>

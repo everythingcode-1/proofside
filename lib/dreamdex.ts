@@ -58,6 +58,28 @@ export type PortfolioView = {
   downShares: number
 }
 
+export type ExecutionEstimate = {
+  requested: number
+  estimatedFill: number
+  estimatedCost: number
+  averagePrice: number | null
+  sufficientLiquidity: boolean
+}
+
+export function estimateBuyExecution(asks: [number, number][], requested: number): ExecutionEstimate {
+  let remaining = Math.max(0, requested)
+  let estimatedCost = 0
+  for (const [price, available] of asks) {
+    const fill = Math.min(remaining, Math.max(0, available))
+    estimatedCost += fill * price
+    remaining -= fill
+    if (remaining <= 0) break
+  }
+  const estimatedFill = requested - remaining
+  const roundedCost = Number(estimatedCost.toFixed(12))
+  return { requested, estimatedFill, estimatedCost: roundedCost, averagePrice: estimatedFill > 0 ? Number((roundedCost / estimatedFill).toFixed(12)) : null, sufficientLiquidity: requested > 0 && remaining <= 0 }
+}
+
 export function orderExecution(
   order: Pick<UnifiedOrder, "amount" | "filled" | "remaining" | "price" | "status" | "info">,
   direction: Direction,
@@ -221,6 +243,16 @@ export async function browserPortfolio(provider: EIP1193Provider, market: Pick<M
   const { exchange } = await browserExchange(provider)
   try {
     return portfolioFromBalances(await exchange.fetchBalance(), market)
+  } finally {
+    await Promise.race([exchange.close(), new Promise((resolve) => setTimeout(resolve, 1_500))]).catch(() => undefined)
+  }
+}
+
+export async function marketExecutionEstimate(market: Pick<MarketView, "yesSymbol" | "noSymbol">, direction: Direction, shares: number) {
+  const exchange = createExchange()
+  try {
+    const symbol = direction === "UP" ? market.yesSymbol : market.noSymbol
+    return estimateBuyExecution((await exchange.fetchOrderBook(symbol, 10)).asks, shares)
   } finally {
     await Promise.race([exchange.close(), new Promise((resolve) => setTimeout(resolve, 1_500))]).catch(() => undefined)
   }

@@ -1,6 +1,6 @@
 "use client"
-import { useCallback, useEffect, useRef, useState } from "react"
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { useCallback, useEffect, useId, useRef, useState } from "react"
+import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { watchOraclePrice } from "@/lib/dreamdex"
 import { applyLiveOracleTick, mergeOracleChartPoints, seedOracleChart, type OracleChartView, type OracleLiveTick } from "@/lib/oracle-chart"
 import type { MarketView } from "@/lib/types"
@@ -9,7 +9,9 @@ const price = (value: number | null) => value === null ? "—" : new Intl.Number
 
 export function MarketOracleChart({ market }: { market: Pick<MarketView, "id" | "asset" | "opensAt" | "locksAt" | "strike"> }) {
   const { id: marketId, asset } = market
+  const areaId = useId().replace(/:/g, "")
   const [chart, setChart] = useState<OracleChartView | null>(null), [error, setError] = useState<string | null>(null)
+  const [reducedMotion, setReducedMotion] = useState(false)
   const [stream, setStream] = useState<{ state: "CONNECTING" | "LIVE" | "OFFLINE"; block: number | null; sourceAge: number | null }>({ state: "CONNECTING", block: null, sourceAge: null })
   const liveTick = useRef<OracleLiveTick | null>(null)
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -27,6 +29,13 @@ export function MarketOracleChart({ market }: { market: Pick<MarketView, "id" | 
       setError(reason instanceof Error ? reason.message : "Oracle chart unavailable.")
     }
   }, [marketId])
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)")
+    const sync = () => setReducedMotion(media.matches)
+    sync()
+    media.addEventListener("change", sync)
+    return () => media.removeEventListener("change", sync)
+  }, [])
   useEffect(() => {
     const controller = new AbortController()
     setError(null)
@@ -61,16 +70,22 @@ export function MarketOracleChart({ market }: { market: Pick<MarketView, "id" | 
     <div className="oracle-chart-head"><div><span>{asset} / {chart.quote}</span><strong>{price(chart.currentPrice)}</strong></div><div className={above ? "positive" : "negative"}><span>{above ? "Above opening" : "Below opening"}</span><strong>{chart.change === null ? "—" : `${above ? "+" : "−"}${price(Math.abs(chart.change))} · ${above ? "+" : "−"}${Math.abs(chart.changePercent ?? 0).toFixed(2)}%`}</strong></div></div>
     <div className="oracle-plot" role="img" aria-label={summary}>
       {chart.points.length > 1 ? <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chart.points} margin={{ top: 16, right: 22, bottom: 4, left: 4 }}>
+        <AreaChart data={chart.points} margin={{ top: 16, right: 22, bottom: 4, left: 4 }}>
+          <defs><linearGradient id={areaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3c9dff" stopOpacity={0.4} /><stop offset="100%" stopColor="#2763dd" stopOpacity={0.015} /></linearGradient></defs>
           <CartesianGrid vertical={false} stroke="rgba(255,255,255,.055)" strokeDasharray="3 5" />
           <XAxis dataKey="time" axisLine={false} tickLine={false} minTickGap={54} tickFormatter={(time) => new Date(time * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} />
-          <YAxis domain={["dataMin - 5", "dataMax + 5"]} axisLine={false} tickLine={false} width={66} tickFormatter={(value) => new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value)} />
+          <YAxis domain={["dataMin - 5", "dataMax + 5"]} axisLine={false} tickLine={false} width={66} tickFormatter={(value) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value)} />
           <Tooltip cursor={{ stroke: "rgba(255,255,255,.16)", strokeDasharray: "3 4" }} content={({ active, payload, label }) => active && payload?.[0] ? <div className="oracle-tooltip"><span>{new Date(Number(label) * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span><strong>{price(Number(payload[0].value))}</strong></div> : null} />
           {chart.openingPrice !== null && <ReferenceLine y={chart.openingPrice} stroke="rgba(255,181,71,.72)" strokeDasharray="6 6" label={{ value: `Opening ${price(chart.openingPrice)}`, position: "insideTopRight", fill: "#ffb547", fontSize: 10 }} />}
-          <Line type="monotone" dataKey="close" stroke={above ? "var(--cyan)" : "var(--coral)"} strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "var(--ink)" }} isAnimationActive animationDuration={500} animationEasing="ease-out" />
-        </LineChart>
+          <Area type="monotone" dataKey="close" stroke="#6bb8ff" fill={`url(#${areaId})`} strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "var(--ink)" }} isAnimationActive={!reducedMotion} animationDuration={500} animationEasing="ease-out" />
+        </AreaChart>
       </ResponsiveContainer> : <div className="oracle-empty oracle-live-seed"><i /><span>Live tick received</span><small>Drawing the next oracle update…</small></div>}
     </div>
+    <table className="sr-only">
+      <caption>Recent {asset} oracle prices</caption>
+      <thead><tr><th scope="col">Time</th><th scope="col">Price in {chart.quote}</th></tr></thead>
+      <tbody>{chart.points.slice(-12).map((point) => <tr key={point.time}><td>{new Date(point.time * 1000).toLocaleTimeString()}</td><td>{price(point.close)}</td></tr>)}</tbody>
+    </table>
     <div className="oracle-chart-foot"><span>{chart.points[0] ? new Date(chart.points[0].time * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "No history"}</span><span className={streamClass}>{streamLabel}</span><span>{stream.block ? `Block #${stream.block.toLocaleString()}` : chart.updatedAt ? new Date(chart.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</span></div>
   </section>
 }

@@ -11,6 +11,7 @@ const baseProps = {
   shares: "2",
   maxLoss: 1.44,
   portfolio: null,
+  executionEstimate: null,
   marketLive: true,
   executionBlocked: false,
   tradePending: false,

@@ -2,9 +2,12 @@
 
 Proofside is a decision-intelligence layer for human and AI forecasts. Structured Decision Receipts are signed by their creators, optionally anchored on Somnia, settled by DreamDEX Event Contracts, and scored for calibration.
 
+Production: [https://proofside.vercel.app](https://proofside.vercel.app)
+
 ## What works
 
 - Publishes one shared receipt schema for humans and registered agents.
+- Includes Proofside Sentinel, a transparent rule-based reference agent that turns live DreamDEX odds and Somnia oracle data into an attributed forecast receipt.
 - Canonicalizes and hashes confidence, thesis, counter-case, invalidation condition, market binding, and revision history.
 - Anchors receipt hashes through the minimal `ForecastRegistry` when relayer configuration is present.
 - Verifies stored content against its canonical hash and Somnia registry state.
@@ -74,6 +77,7 @@ Proofside never stores private keys and never trades autonomously with user fund
 
 - SQLite uses Node 22's built-in `node:sqlite` module. It is intentionally a single-instance store; move the repository to Postgres before horizontal scaling.
 - The UI selects one earliest-expiring active BTC/ETH room.
+- Proofside Sentinel is a deterministic reference integration, not a hosted generative model or autonomous trading agent.
 - Order execution is testnet-only and uses deliberate IOC behavior so unfilled remainders do not rest invisibly.
 - The testnet venue currently uses tUSDC rather than mainnet USDso.
 - The registry stores only hashes and provenance. Full receipt content remains in the single-instance SQLite database.

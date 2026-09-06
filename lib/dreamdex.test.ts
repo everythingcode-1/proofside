@@ -21,6 +21,7 @@ vi.mock("viem", async (importOriginal) => ({
 import {
   browserExchange,
   browserPortfolio,
+  estimateBuyExecution,
   faucetBrowserCollateral,
   orderExecution,
   portfolioFromBalances,
@@ -56,6 +57,17 @@ describe("browserExchange", () => {
 })
 
 describe("DreamDEX account views", () => {
+  it("estimates a buy across executable ask depth", () => {
+    expect(estimateBuyExecution([[0.6, 2], [0.7, 3]], 4)).toEqual({
+      requested: 4,
+      estimatedFill: 4,
+      estimatedCost: 2.6,
+      averagePrice: 0.65,
+      sufficientLiquidity: true,
+    })
+    expect(estimateBuyExecution([[0.6, 2]], 4).sufficientLiquidity).toBe(false)
+  })
+
   it("falls back to HTTP when the SDK WebSocket market read fails", async () => {
     const fallback = vi.fn(async () => ({ status: 1 }))
 

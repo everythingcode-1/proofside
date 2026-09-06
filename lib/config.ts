@@ -5,7 +5,7 @@ const envAddress = (name: string, fallback: `0x${string}`) =>
 
 export const DREAMDEX = {
   chainId: 50312,
-  rpcUrl: process.env.NEXT_PUBLIC_SOMNIA_RPC_URL || "https://api.infra.testnet.somnia.network",
+  rpcUrl: process.env.NEXT_PUBLIC_SOMNIA_RPC_URL || "https://dream-rpc.somnia.network",
   wsUrl: process.env.NEXT_PUBLIC_SOMNIA_WS_URL || "wss://api.infra.testnet.somnia.network/ws",
   indexerUrl: process.env.NEXT_PUBLIC_DREAMDEX_INDEXER_URL || "https://dev.smk.somnia.host/v1/graphql",
   priceFeed: {

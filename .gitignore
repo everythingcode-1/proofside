@@ -9,3 +9,8 @@ coverage/
 data/*.sqlite*
 
 .vercel
+
+# local audit artifacts
+.artifacts/
+dogfood-output/
+.codex-*.png

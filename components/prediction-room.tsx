@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { EIP1193Provider } from "viem"
 import { DREAMDEX } from "@/lib/config"
-import { browserPortfolio, placeBrowserOrder, watchMarketBook, type PortfolioView } from "@/lib/dreamdex"
+import { browserPortfolio, placeBrowserOrder, watchMarketBook, type ExecutionEstimate, type PortfolioView } from "@/lib/dreamdex"
 import { countdownLabel, durationLabel } from "@/lib/format"
 import { freshnessState, type FreshnessState } from "@/lib/realtime"
 import type { TransactionState } from "@/lib/transactions"
@@ -20,6 +20,7 @@ import type { StoredForecast } from "@/lib/forecast-store"
 type MarketResponse = { market?: MarketView; error?: string; fetchedAt: number }
 type Activity = { kind: "FAUCET" | "ORDER"; hash: `0x${string}`; detail: string }
 type AgentSignal = { id: string; actorId: string; direction: Direction; confidence: number | null; reason: string; agent: { name: string; framework: string } }
+type ReferenceAgent = { direction: Direction; confidenceBps: number; thesis: string; evidence: { observedAt: number }; proofState: string; receiptId: string }
 
 const emptyRoom = (roomId = "pending"): RoomState => ({
   roomId,
@@ -47,8 +48,11 @@ export function PredictionRoom() {
   const [lastVerifiedAt, setLastVerifiedAt] = useState<number | null>(null)
   const [previousMarketId, setPreviousMarketId] = useState<string | null>(null)
   const [portfolio, setPortfolio] = useState<PortfolioView | null>(null)
+  const [executionEstimate, setExecutionEstimate] = useState<ExecutionEstimate | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [signals, setSignals] = useState<AgentSignal[]>([])
+  const [referenceAgent, setReferenceAgent] = useState<ReferenceAgent | null>(null)
+  const [referenceBusy, setReferenceBusy] = useState(false)
   const [attribution, setAttribution] = useState<{ agent: string; signal: string; name?: string } | null>(null)
   const [verificationMs, setVerificationMs] = useState<number | null>(null)
   const [createdReceipt, setCreatedReceipt] = useState<StoredForecast | null>(null)
@@ -79,6 +83,7 @@ export function PredictionRoom() {
         setPreviousMarketId(previousMarket.id)
         setRoom(emptyRoom(payload.market.id))
         setSignals([])
+        setReferenceAgent(null)
         setAttribution(null)
         setDecisionLabOpen(false)
         setCreatedReceipt(null)
@@ -171,6 +176,18 @@ export function PredictionRoom() {
     void refreshPortfolio(wallet, market)
   }, [wallet, market?.id, activityNonce])
 
+  useEffect(() => {
+    const amount = Number(shares)
+    if (!market || !Number.isFinite(amount) || amount <= 0) { setExecutionEstimate(null); return }
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      const response = await fetch(`/api/markets/${market.id}/quote?direction=${direction}&shares=${amount}`, { cache: "no-store", signal: controller.signal }).catch(() => null)
+      if (!response?.ok) return setExecutionEstimate(null)
+      setExecutionEstimate(((await response.json()) as { estimate: ExecutionEstimate }).estimate)
+    }, 250)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [market?.id, direction, shares])
+
   const submitConviction = async () => {
     if (!market?.isLive) return
     const account = wallet
@@ -188,6 +205,21 @@ export function PredictionRoom() {
     }
     setRoom(payload as RoomState)
     setTradeMessage(`Your ${direction} conviction is in the room. This is not a trade yet.`)
+  }
+
+  const refreshReferenceAgent = async () => {
+    if (!market || referenceBusy) return
+    setReferenceBusy(true)
+    try {
+      const response = await fetch(`/api/agent/reference/${market.id}`, { method: "POST" })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.message || "Reference agent is unavailable.")
+      setReferenceAgent({ ...payload.forecast, proofState: payload.receipt.proofState, receiptId: payload.receipt.id })
+    } catch (reason) {
+      setTradeMessage(reason instanceof Error ? reason.message : "Reference agent is unavailable.")
+    } finally {
+      setReferenceBusy(false)
+    }
   }
 
   const trade = async () => {
@@ -259,6 +291,27 @@ export function PredictionRoom() {
     }
   }
 
+  if (!market && !error) {
+    return (
+      <section className="room-shell dashboard-loading" aria-live="polite" aria-busy="true">
+        <div className="market-status-bar loading-status" aria-label="Loading live market status">
+          <div><small>Live market</small><strong>Connecting…</strong></div>
+          <div><small>Somnia network</small><strong>50312</strong></div>
+          <div><small>Market update</small><strong>Reading chain…</strong></div>
+          <div><small>Wallet</small><strong>Not connected</strong></div>
+        </div>
+        <section className="market-overview loading-overview" aria-label="Loading live market overview">
+          <article className="overview-feature"><p>Current event contract</p><strong>Opening the next room…</strong><span>Reading active DreamDEX Event Contracts from Somnia.</span><small>Verified market data will appear here.</small></article>
+          {["YES price", "NO price", "Room reading"].map((label) => <article className="overview-stat" key={label}><p>{label}</p><span className="skeleton-line wide" /><span className="skeleton-line" /><small>Loading live data</small></article>)}
+        </section>
+        <div className="forecast-workspace loading-workspace">
+          <section className="market-panel loading-market-panel" aria-hidden="true"><span className="skeleton-line label" /><span className="skeleton-line title" /><span className="skeleton-line medium" /><div className="skeleton-chart"><i /><i /><i /><i /><i /></div></section>
+          <aside className="trade-ticket loading-trade-ticket" aria-hidden="true"><span className="skeleton-line label" /><span className="skeleton-line title" /><span className="skeleton-line medium" /><div className="loading-odds"><i /><i /></div><span className="skeleton-line field" /><span className="skeleton-line button" /></aside>
+        </div>
+      </section>
+    )
+  }
+
   if (!market) {
     return (
       <section className="room-shell unavailable" aria-live="polite">
@@ -285,6 +338,29 @@ export function PredictionRoom() {
         <div className="rollover-note">✦ Host opened a new room after market <span>{short(previousMarketId)}</span> left the live venue.</div>
       )}
 
+      <section className="market-overview" aria-label="Live market overview">
+        <article className="overview-feature">
+          <div><p className="source-label dreamdex">Current event contract</p><strong>{market.asset} / USDC</strong></div>
+          <span>{market.question}</span>
+          <small>Closes in {countdownLabel(market.locksAt, now)} · {durationLabel(market.durationSec)} room</small>
+        </article>
+        <article className="overview-stat up">
+          <p>DreamDEX YES</p>
+          <strong>{market.upPrice === null ? "—" : `${Math.round(market.upPrice * 100)}¢`}</strong>
+          <small>Live executable price</small>
+        </article>
+        <article className="overview-stat down">
+          <p>DreamDEX NO</p>
+          <strong>{market.downPrice === null ? "—" : `${Math.round(market.downPrice * 100)}¢`}</strong>
+          <small>Live executable price</small>
+        </article>
+        <article className="overview-stat room-reading">
+          <p>Room reading</p>
+          <strong>{room.upPercent}% UP</strong>
+          <small>{room.participants} recorded conviction{room.participants === 1 ? "" : "s"}</small>
+        </article>
+      </section>
+
       <div className="forecast-workspace">
         <section className="market-panel" aria-labelledby="canonical-market-question">
           <div className="source-heading">
@@ -309,6 +385,7 @@ export function PredictionRoom() {
           shares={shares}
           maxLoss={maxLoss}
           portfolio={portfolio}
+          executionEstimate={executionEstimate}
           marketLive={market.isLive}
           executionBlocked={["STALE", "OFFLINE"].includes(freshness)}
           tradePending={["PREFLIGHT", "AWAITING_SIGNATURE", "SUBMITTED"].includes(tradeState)}
@@ -326,6 +403,20 @@ export function PredictionRoom() {
         />
       </div>
 
+      <details className="advanced-tools">
+      <summary><span><strong>Agent insights & Decision Lab</strong><small>Optional analysis and verifiable reasoning tools</small></span></summary>
+      <div className="market-tools">
+      <section className="reference-agent" aria-live="polite">
+        <div className="reference-agent-heading"><span className="agent-monogram" aria-hidden="true">PS</span><div><p className="source-label proofside">Rule-based reference agent</p><h3>Proofside Sentinel</h3></div></div>
+        <div className="reference-agent-content">{referenceAgent ? <>
+          <strong className={referenceAgent.direction.toLowerCase()}>{referenceAgent.direction} · {Math.round(referenceAgent.confidenceBps / 100)}%</strong>
+          <p>{referenceAgent.thesis}</p>
+          <small>{referenceAgent.proofState} · Updated {new Date(referenceAgent.evidence.observedAt).toLocaleTimeString()}</small>
+          <a className="receipt-link" href={`/forecasts/${referenceAgent.receiptId}`}>Verify agent receipt →</a>
+        </> : <p>Run the transparent baseline agent against the live DreamDEX price and Somnia oracle.</p>}</div>
+        <button className="secondary-button" disabled={referenceBusy || !market.isLive} onClick={refreshReferenceAgent}>{referenceBusy ? "Reading live market…" : "Refresh agent forecast"}</button>
+      </section>
+
       <ForecastComposer
         key={market.id}
         open={decisionLabOpen}
@@ -333,12 +424,14 @@ export function PredictionRoom() {
         market={market}
         direction={direction}
         onDirectionChange={(next) => { setDirection(next); setAttribution(null) }}
-        signals={signals.map((signal) => ({ direction: signal.direction, confidence: signal.confidence, reason: signal.reason, agentName: signal.agent.name }))}
+        signals={[...signals.map((signal) => ({ direction: signal.direction, confidence: signal.confidence, reason: signal.reason, agentName: signal.agent.name })), ...(referenceAgent ? [{ direction: referenceAgent.direction, confidence: referenceAgent.confidenceBps / 100, reason: referenceAgent.thesis, agentName: "Proofside Sentinel" }] : [])]}
         room={room}
         baselineUpPrice={decisionBaseline?.marketId === market.id ? decisionBaseline.upPrice : market.upPrice}
         onRevealChange={(_revealed, baselineUpPrice) => setDecisionBaseline({ marketId: market.id, upPrice: baselineUpPrice })}
         onReceipt={setCreatedReceipt}
       />
+      </div>
+      </details>
 
       {createdReceipt && <section className="created-receipt" aria-live="polite">
         <div className="section-title compact-title"><p className="eyebrow">Decision memory</p><h2>Your reasoning is now verifiable.</h2></div>
