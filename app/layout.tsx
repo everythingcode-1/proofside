@@ -7,7 +7,10 @@ import "./reference-theme.css"
 export const metadata: Metadata = {
   title: "Proofside — Decision Intelligence for Event Markets",
   description: "Understand what changed, challenge a thesis with agents, and optionally act through DreamDEX on Somnia.",
-  icons: { icon: "/brand/proofside-ribbon.svg" },
+  icons: {
+    icon: [{ url: "/brand/proofside-mark.png", type: "image/png", sizes: "480x480" }],
+    apple: [{ url: "/brand/proofside-mark.png", type: "image/png", sizes: "480x480" }],
+  },
 }
 
 export const viewport: Viewport = {

@@ -14,3 +14,6 @@ data/*.sqlite*
 .artifacts/
 dogfood-output/
 .codex-*.png
+
+# local videos (link them instead of committing)
+videos/

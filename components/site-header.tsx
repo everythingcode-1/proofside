@@ -55,7 +55,7 @@ export function SiteHeader({ active }: { active: "FORECASTS" | "AGENTS" | "REPUT
     <a className="skip-link" href="#page-content">Skip to main content</a>
     <header className="site-header">
       <a className="brand" href="/" aria-label="Proofside home">
-        <span className="brand-mark"><img src="/brand/proofside-ribbon.svg" alt="" /></span>
+        <span className="brand-mark"><img src="/brand/proofside-mark.svg" alt="" /></span>
         <span><strong>Proofside</strong><small>Prediction markets</small></span>
       </a>
       <span className="header-context">Prediction markets <span>/</span> {links.find(([key]) => key === active)?.[2]}</span>
