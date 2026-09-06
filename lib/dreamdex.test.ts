@@ -5,10 +5,12 @@ const faucet = vi.fn(async () => ({ hash: "0xabc" }))
 const close = vi.fn(async () => undefined)
 const setSigner = vi.fn()
 const fetchBalance = vi.fn(async () => ({ tUSDC: { free: 10_000, used: 0, total: 10_000 } }))
+const fetchOrderBook = vi.fn(async () => ({ asks: [[0.61, 200]], bids: [[0.58, 100]] }))
+const watchOrderBook = vi.fn(() => new Promise<never>(() => {}))
 
 vi.mock("@somnia-chain/markets-sdk", () => ({
   isBinaryMarket: vi.fn(),
-  SomniaMarkets: vi.fn(() => ({ loadMarkets, setSigner, fetchBalance, trader: { faucet }, close })),
+  SomniaMarkets: vi.fn(() => ({ loadMarkets, setSigner, fetchBalance, fetchOrderBook, watchOrderBook, trader: { faucet }, close })),
 }))
 
 vi.mock("viem", async (importOriginal) => ({
@@ -23,10 +25,12 @@ import {
   browserPortfolio,
   estimateBuyExecution,
   faucetBrowserCollateral,
+  marketExecutionEstimate,
   orderExecution,
   portfolioFromBalances,
   readWithRpcFallback,
   sortMarketCandidates,
+  watchMarketBook,
 } from "./dreamdex"
 
 describe("browserExchange", () => {
@@ -53,6 +57,38 @@ describe("browserExchange", () => {
     expect(faucet).toHaveBeenCalledOnce()
     expect(result.hash).toBe("0xabc")
     expect(close).toHaveBeenCalledOnce()
+  })
+})
+
+describe("marketExecutionEstimate", () => {
+  beforeEach(() => {
+    loadMarkets.mockClear()
+    fetchOrderBook.mockClear()
+  })
+
+  it("loads the symbol registry before reading the order book", async () => {
+    await marketExecutionEstimate({ yesSymbol: "M#YES", noSymbol: "M#NO" }, "UP", 10)
+
+    expect(loadMarkets).toHaveBeenCalledOnce()
+    expect(fetchOrderBook).toHaveBeenCalledWith("M#YES", 10)
+  })
+})
+
+describe("watchMarketBook", () => {
+  beforeEach(() => {
+    loadMarkets.mockClear()
+  })
+
+  it("loads the symbol registry before subscribing to the book", async () => {
+    const stop = watchMarketBook(
+      { yesSymbol: "M#YES", noSymbol: "M#NO" } as Parameters<typeof watchMarketBook>[0],
+      vi.fn(),
+      vi.fn(),
+    )
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await stop()
+
+    expect(loadMarkets).toHaveBeenCalledOnce()
   })
 })
 

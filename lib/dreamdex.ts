@@ -251,6 +251,7 @@ export async function browserPortfolio(provider: EIP1193Provider, market: Pick<M
 export async function marketExecutionEstimate(market: Pick<MarketView, "yesSymbol" | "noSymbol">, direction: Direction, shares: number) {
   const exchange = createExchange()
   try {
+    await exchange.loadMarkets(true)
     const symbol = direction === "UP" ? market.yesSymbol : market.noSymbol
     return estimateBuyExecution((await exchange.fetchOrderBook(symbol, 10)).asks, shares)
   } finally {
@@ -269,9 +270,14 @@ export function watchMarketBook(
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
   const run = async () => {
     let attempt = 0
+    let loaded = false
     while (!stopped) {
       try {
         onState(attempt ? "RECONNECTING" : "POLLING")
+        if (!loaded) {
+          await exchange.loadMarkets(true)
+          loaded = true
+        }
         const book = await exchange.watchOrderBook(market.yesSymbol, 3)
         if (stopped) break
         const yes = book.asks[0]?.[0] ?? book.bids[0]?.[0] ?? null
